@@ -20,10 +20,8 @@ import java.util.concurrent.TimeUnit;
 
 public class WorkflowExecutor {
 
-    private static final FluentLogger logger = FluentLogger.forEnclosingClass();
-
     public static final ThreadLocal<String> workflowId = new ThreadLocal<>();
-
+    private static final FluentLogger logger = FluentLogger.forEnclosingClass();
     private final Scheduler scheduler;
     private final WorkflowRepository workflowRepository;
 
@@ -47,6 +45,22 @@ public class WorkflowExecutor {
                 .build();
         this.workflowRepository = workflowRepository;
         this.workflowDependencies = workflowDependencies;
+    }
+
+    /**
+     * Class must have only one public constructor or have a single public constructor annotated with @Inject
+     *
+     * @param clazz
+     * @return
+     */
+    private static Constructor findInjectableConstructor(Class clazz) {
+        List<Constructor> list = Arrays.stream(clazz.getConstructors())
+                .filter(constructor -> Modifier.isPublic(constructor.getModifiers()))
+                .toList();
+        if (list.size() == 1) {
+            return list.get(0);
+        }
+        throw new UnsupportedOperationException("still need to handle multiple constructors with @Inject");
     }
 
     public void start() {
@@ -98,22 +112,6 @@ public class WorkflowExecutor {
                  ClassNotFoundException e) {
             throw new RuntimeException(e);
         }
-    }
-
-    /**
-     * Class must have only one public constructor or have a single public constructor annotated with @Inject
-     *
-     * @param clazz
-     * @return
-     */
-    private static Constructor findInjectableConstructor(Class clazz) {
-        List<Constructor> list = Arrays.stream(clazz.getConstructors())
-                .filter(constructor -> Modifier.isPublic(constructor.getModifiers()))
-                .toList();
-        if (list.size() == 1) {
-            return list.get(0);
-        }
-        throw new UnsupportedOperationException("still need to handle multiple constructors with @Inject");
     }
 
     public void scheduleReevaluation(String workflowId, String conditionId, Instant resumptionTime) {

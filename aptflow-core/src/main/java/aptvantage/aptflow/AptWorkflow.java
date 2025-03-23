@@ -1,20 +1,17 @@
 package aptvantage.aptflow;
 
 import aptvantage.aptflow.api.RunnableWorkflow;
-import com.github.kagkarlsson.scheduler.Scheduler;
-import com.github.kagkarlsson.scheduler.task.Task;
+import aptvantage.aptflow.api.WorkflowFunctions;
+import aptvantage.aptflow.engine.WorkflowExecutor;
+import aptvantage.aptflow.engine.persistence.WorkflowRepository;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
-import aptvantage.aptflow.engine.WorkflowExecutor;
-import aptvantage.aptflow.api.WorkflowFunctions;
-import aptvantage.aptflow.engine.persistence.WorkflowRepository;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.output.MigrateResult;
 import org.jdbi.v3.core.Jdbi;
 
 import javax.sql.DataSource;
 import java.io.Serializable;
-import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
@@ -51,8 +48,8 @@ public class AptWorkflow {
     }
 
     public void stop() {
-       this.workflowExecutor.stop();
-       this.builder.stop();
+        this.workflowExecutor.stop();
+        this.builder.stop();
     }
 
     public static class AptWorkflowBuilder {
@@ -121,15 +118,6 @@ public class AptWorkflow {
             return new AptWorkflow(executor, this);
         }
 
-        private Scheduler initializeScheduler(DataSource dataSource, Task... tasks) {
-            Scheduler scheduler = Scheduler
-                    .create(dataSource, tasks)
-                    .pollingInterval(Duration.ofSeconds(1))
-                    .enableImmediateExecution()
-                    .build();
-
-            return scheduler;
-        }
 
         public void stop() {
             if (managedDataSource) {
