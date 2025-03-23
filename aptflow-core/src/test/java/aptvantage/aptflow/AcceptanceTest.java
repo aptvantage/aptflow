@@ -83,11 +83,9 @@ public class AcceptanceTest {
         String workflowId = "testWorkflowWithSignal";
         aptWorkflow.runWorkflow(ExampleWorkflowWithSignal.class, 777, workflowId);
 
-        // then the status will be waiting for a signal
-        Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() -> {
-                    List<Function> activeFunctions = aptWorkflow.getWorkflowStatus(workflowId).activeFunctions();
-                    return !activeFunctions.isEmpty() && activeFunctions.get(0).category() == EventCategory.SIGNAL;
-                }
+        // then the workflow will eventually be waiting for a signal
+        Awaitility.await().atMost(10, TimeUnit.SECONDS).until(
+                () -> aptWorkflow.getWorkflowStatus(workflowId).isWaitingForSignal()
         );
 
         // and when the signal is sent
@@ -169,6 +167,9 @@ public class AcceptanceTest {
 
         String workflowId = "test-workflow";
         aptWorkflow.runWorkflow(ExampleWorkflow.class, 666, workflowId);
+
+        Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() ->
+                aptWorkflow.getWorkflowStatus(workflowId).status() != EventStatus.SCHEDULED);
 
         aptWorkflow.signalWorkflow(workflowId, "OkToResume", true);
 

@@ -77,20 +77,6 @@ public class WorkflowRepository {
 
     }
 
-    public boolean isActivityComplete(String workflowId, String name) {
-        return jdbi.withHandle(handle ->
-                handle.createQuery("""
-                                SELECT count(workflow_id)
-                                FROM activity
-                                WHERE workflow_id = :workflowId
-                                    AND name = :name
-                                    AND completed_event_id IS NOT NULL
-                                """)
-                        .bind("workflowId", workflowId)
-                        .bind("name", name)
-                        .mapTo(Integer.class).one()) == 1;
-    }
-
     public Activity getActivity(String workflowId, String name) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
@@ -226,13 +212,13 @@ public class WorkflowRepository {
 
     public WorkflowStatus getWorkflowStatus(String workflowId) {
         EventStatus workflowStatus = getLatestEventStatus(workflowId, EventCategory.WORKFLOW);
-        List<Function> activeFunctions = getActiveFunctions(workflowId);
+        List<Function> functions = getFunctions(workflowId);
         //TODO -- provide failed functions
-        return new WorkflowStatus(workflowStatus, activeFunctions, null);
+        return new WorkflowStatus(workflowStatus, functions);
 
     }
 
-    List<Function> getActiveFunctions(String workflowId) {
+    List<Function> getFunctions(String workflowId) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
                                 SELECT
@@ -244,7 +230,6 @@ public class WorkflowRepository {
                                     v_workflow_function
                                 WHERE
                                     workflow_id = :workflowId
-                                    AND completed is null
                                 ORDER BY started
                                 """)
                         .bind("workflowId", workflowId)
@@ -253,7 +238,7 @@ public class WorkflowRepository {
                                         rs.getString("function_id"),
                                         eventCategoryColumnMapper.map(rs, "category", ctx),
                                         instantColumnMapper.map(rs, "started", ctx),
-                                        null //always null because of the sql query
+                                        instantColumnMapper.map(rs, "completed", ctx)
                                 ))
                         .collectIntoList()
         );

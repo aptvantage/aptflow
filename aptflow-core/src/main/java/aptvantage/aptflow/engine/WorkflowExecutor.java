@@ -161,8 +161,6 @@ public class WorkflowExecutor {
                 new RunWorkflowTaskInput(workflowId));
         scheduler.schedule(instance,
                 Instant.now());
-        // TODO -- probably don't need to wait here as we already have a "scheduled" state of a workflow
-        Awaitility.await().atMost(20, TimeUnit.SECONDS).until(() -> this.workflowRepository.hasWorkflowStarted(workflowId));
     }
 
     public <R extends Serializable> CompletableFuture<R> supplyAsync(Supplier<R> supplier) {
