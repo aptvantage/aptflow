@@ -77,7 +77,7 @@ public class WorkflowFunctions {
         }
         logger.atInfo().log("Scheduling reevaluation of condition [%s] of workflow [%s] in [%s]", conditionIdentifier, workflowId, evaluationInterval);
         StartWorkflowTaskInput input = new StartWorkflowTaskInput(workflowId);
-        scheduler.schedule(SchedulerConfig.RUN_WORKFLOW_TASK.instance(
+        scheduler.schedule(WorkflowExecutor.RUN_WORKFLOW_TASK.instance(
                 conditionKey, input), Instant.now().plus(evaluationInterval));
         throw new ConditionNotSatisfiedException(conditionIdentifier);
 
@@ -100,7 +100,7 @@ public class WorkflowFunctions {
             AptWorkflow.repository.newSleepStarted(workflowId, identifier, duration);
             logger.atInfo().log("scheduling wake-up-call for sleep [%s::%s] in [%s]", workflowId, identifier, duration);
             CompleteSleepTaskInput input = new CompleteSleepTaskInput(workflowId, identifier);
-            scheduler.schedule(SchedulerConfig.COMPLETE_SLEEP_TASK.instance(
+            scheduler.schedule(WorkflowExecutor.COMPLETE_SLEEP_TASK.instance(
                     "sleep::%s::".formatted(workflowId, identifier), input
             ), Instant.now().plus(duration));
             throw new WorkflowSleepingException(identifier, duration);

@@ -116,11 +116,13 @@ public class WorkflowRepository {
                                         new Event(
                                                 rs.getString("started_category"),
                                                 rs.getString("started_status"),
+                                                rs.getString("a_name"),
                                                 instantColumnMapper.map(rs, "started_timestamp", ctx)
                                         ),
                                         new Event(
                                                 rs.getString("completed_category"),
                                                 rs.getString("completed_status"),
+                                                rs.getString("a_name"),
                                                 instantColumnMapper.map(rs, "completed_timestamp", ctx)
                                         )
                                 ))
@@ -205,11 +207,13 @@ public class WorkflowRepository {
                                         new Event(
                                                 rs.getString("waiting_category"),
                                                 rs.getString("waiting_status"),
+                                                rs.getString("s_name"),
                                                 instantColumnMapper.map(rs, "waiting_timestamp", ctx)
                                         ),
                                         new Event(
                                                 rs.getString("received_category"),
                                                 rs.getString("received_status"),
+                                                rs.getString("s_name"),
                                                 instantColumnMapper.map(rs, "received_timestamp", ctx)
                                         )
                                 ))
@@ -255,16 +259,19 @@ public class WorkflowRepository {
                                         new Event(
                                                 rs.getString("scheduled_category"),
                                                 rs.getString("scheduled_status"),
+                                                rs.getString("w_id"),
                                                 instantColumnMapper.map(rs, "scheduled_timestamp", ctx)
                                         ),
                                         new Event(
                                                 rs.getString("started_category"),
                                                 rs.getString("started_status"),
+                                                rs.getString("w_id"),
                                                 instantColumnMapper.map(rs, "started_timestamp", ctx)
                                         ),
                                         new Event(
                                                 rs.getString("completed_category"),
                                                 rs.getString("completed_status"),
+                                                rs.getString("w_id"),
                                                 instantColumnMapper.map(rs, "completed_timestamp", ctx)
                                         )
                                 ))
@@ -414,11 +421,13 @@ public class WorkflowRepository {
                                         new Event(
                                                 rs.getString("waiting_category"),
                                                 rs.getString("waiting_status"),
+                                                rs.getString("c_identifier"),
                                                 instantColumnMapper.map(rs, "waiting_timestamp", ctx)
                                         ),
                                         new Event(
                                                 rs.getString("satisfied_category"),
                                                 rs.getString("satisfied_status"),
+                                                rs.getString("c_identifier"),
                                                 instantColumnMapper.map(rs, "satisfied_timestamp", ctx)
                                         )
                                 ))
@@ -489,11 +498,13 @@ public class WorkflowRepository {
                                         new Event(
                                                 rs.getString("started_category"),
                                                 rs.getString("started_status"),
+                                                rs.getString("s_identifier"),
                                                 instantColumnMapper.map(rs, "started_timestamp", ctx)
                                         ),
                                         new Event(
                                                 rs.getString("completed_category"),
                                                 rs.getString("completed_status"),
+                                                rs.getString("s_identifier"),
                                                 instantColumnMapper.map(rs, "completed_timestamp", ctx)
                                         )
                                 ))

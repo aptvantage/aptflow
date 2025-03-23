@@ -1,18 +1,19 @@
 package aptvantage.aptflow;
 
+import aptvantage.aptflow.api.RunnableWorkflow;
 import com.github.kagkarlsson.scheduler.Scheduler;
 import com.github.kagkarlsson.scheduler.task.Task;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import aptvantage.aptflow.engine.WorkflowExecutor;
 import aptvantage.aptflow.api.WorkflowFunctions;
-import aptvantage.aptflow.engine.SchedulerConfig;
 import aptvantage.aptflow.engine.persistence.WorkflowRepository;
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.output.MigrateResult;
 import org.jdbi.v3.core.Jdbi;
 
 import javax.sql.DataSource;
+import java.io.Serializable;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -22,26 +23,38 @@ public class AptWorkflow {
 
     public static WorkflowRepository repository;
     private final WorkflowExecutor workflowExecutor;
-    private final NimbusServiceBuilder builder;
+    private final AptWorkflowBuilder builder;
 
-    private AptWorkflow(WorkflowExecutor workflowExecutor, NimbusServiceBuilder builder) {
+    private AptWorkflow(WorkflowExecutor workflowExecutor, AptWorkflowBuilder builder) {
         this.workflowExecutor = workflowExecutor;
         this.builder = builder;
     }
 
-    public static NimbusServiceBuilder builder() {
-        return new NimbusServiceBuilder();
+    public static AptWorkflowBuilder builder() {
+        return new AptWorkflowBuilder();
     }
 
-    public WorkflowExecutor executor() {
-        return this.workflowExecutor;
+    public <T extends Serializable> void signalWorkflow(String workflowId, String signalName, T signalValue) {
+        this.workflowExecutor.signalWorkflow(workflowId, signalName, signalValue);
+    }
+
+    public <P extends Serializable> void runWorkflow(Class<? extends RunnableWorkflow<?, P>> workflowClass, P workflowParam, String workflowId) {
+        this.workflowExecutor.runWorkflow(workflowClass, workflowParam, workflowId);
+    }
+
+    public <R> R getWorkflowOutput(String workflowId, Class<R> outputClass) {
+        return (R) repository.getWorkflow(workflowId).output();
+    }
+
+    public boolean isWorkflowCompleted(String workflowId) {
+        return repository.getWorkflow(workflowId).isComplete();
     }
 
     public void stop() {
         builder.stop();
     }
 
-    public static class NimbusServiceBuilder {
+    public static class AptWorkflowBuilder {
 
         private final Set<Object> workflowDependencies = new HashSet<>();
         private DataSource dataSource;
@@ -49,7 +62,7 @@ public class AptWorkflow {
         private boolean managedDataSource = false;
         private Scheduler scheduler;
 
-        private NimbusServiceBuilder() {
+        private AptWorkflowBuilder() {
         }
 
         private static void runDatabaseMigration(DataSource dataSource) {
@@ -75,18 +88,18 @@ public class AptWorkflow {
             return new HikariDataSource(config);
         }
 
-        public NimbusServiceBuilder dataSource(String username, String password, String url) {
+        public AptWorkflowBuilder dataSource(String username, String password, String url) {
             this.dataSource = initializeDataSource(username, password, url);
             this.managedDataSource = true;
             return this;
         }
 
-        public NimbusServiceBuilder dataSource(DataSource dataSource) {
+        public AptWorkflowBuilder dataSource(DataSource dataSource) {
             this.dataSource = dataSource;
             return this;
         }
 
-        public NimbusServiceBuilder registerWorkflowDependencies(Object... objects) {
+        public AptWorkflowBuilder registerWorkflowDependencies(Object... objects) {
             workflowDependencies.addAll(Arrays.asList(objects));
             return this;
         }
@@ -95,14 +108,15 @@ public class AptWorkflow {
             //TODO -- null check this.dataSource
             runDatabaseMigration(this.dataSource);
 
-            SchedulerConfig.initialize(this.workflowDependencies);
 
             this.scheduler = initializeScheduler(this.dataSource,
-                    SchedulerConfig.RUN_WORKFLOW_TASK,
-                    SchedulerConfig.SIGNAL_WORKFLOW_TASK,
-                    SchedulerConfig.COMPLETE_SLEEP_TASK);
+                    WorkflowExecutor.RUN_WORKFLOW_TASK,
+                    WorkflowExecutor.SIGNAL_WORKFLOW_TASK,
+                    WorkflowExecutor.COMPLETE_SLEEP_TASK);
 
+            WorkflowExecutor.initialize(this.workflowDependencies);
             WorkflowExecutor executor = new WorkflowExecutor(scheduler);
+
             AptWorkflow.repository = new WorkflowRepository(Jdbi.create(this.dataSource));
             WorkflowFunctions.initialize(scheduler);
 

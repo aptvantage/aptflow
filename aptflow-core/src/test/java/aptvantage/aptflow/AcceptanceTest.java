@@ -41,14 +41,14 @@ public class AcceptanceTest {
         String workflowId = "simple-workflow-test";
 
         // when the workflow is submitted
-        this.aptWorkflow.executor().runWorkflow(ExampleSimpleWorkflow.class, 777, workflowId);
+        this.aptWorkflow.runWorkflow(ExampleSimpleWorkflow.class, 777, workflowId);
 
         // then it eventually completes
         Awaitility.await().atMost(1, TimeUnit.MINUTES)
-                .until(() -> this.aptWorkflow.executor().isWorkflowCompleted(workflowId));
+                .until(() -> this.aptWorkflow.isWorkflowCompleted(workflowId));
 
         // and we receive the expected output
-        String output = this.aptWorkflow.executor().getWorkflowOutput(workflowId, String.class);
+        String output = this.aptWorkflow.getWorkflowOutput(workflowId, String.class);
         assertEquals("777", output);
 
         //TODO -- assert on the expected events
@@ -63,14 +63,14 @@ public class AcceptanceTest {
         public void testActivity() throws Exception {
             //given we run a workflow with an activity
             String workflowId = "activity-test";
-            aptWorkflow.executor().runWorkflow(ExampleWorkflowWithActivity.class, 777, workflowId);
+            aptWorkflow.runWorkflow(ExampleWorkflowWithActivity.class, 777, workflowId);
 
             // when the workflow completes
             Awaitility.await().atMost(1, TimeUnit.MINUTES)
-                    .until(() -> aptWorkflow.executor().isWorkflowCompleted(workflowId));
+                    .until(() -> aptWorkflow.isWorkflowCompleted(workflowId));
 
             // then we receive the expected output
-            String output = aptWorkflow.executor().getWorkflowOutput(workflowId, String.class);
+            String output = aptWorkflow.getWorkflowOutput(workflowId, String.class);
 
             assertEquals("777", output);
 
@@ -83,12 +83,12 @@ public class AcceptanceTest {
 
             String workflowId = "nested-activity-test";
 
-            aptWorkflow.executor().runWorkflow(ExampleWorkflowWithNestedActivities.class, "900", workflowId);
+            aptWorkflow.runWorkflow(ExampleWorkflowWithNestedActivities.class, "900", workflowId);
 
             Awaitility.await().atMost(1, TimeUnit.MINUTES)
-                    .until(() -> aptWorkflow.executor().getWorkflowOutput(workflowId, Integer.class) != null);
+                    .until(() -> aptWorkflow.getWorkflowOutput(workflowId, Integer.class) != null);
 
-            int output = aptWorkflow.executor().getWorkflowOutput(workflowId, Integer.class);
+            int output = aptWorkflow.getWorkflowOutput(workflowId, Integer.class);
             assertEquals(900, output);
         }
 
@@ -99,13 +99,13 @@ public class AcceptanceTest {
     public void test() throws Exception {
 
         String workflowId = "test-workflow";
-        aptWorkflow.executor().runWorkflow(ExampleWorkflow.class, 666, workflowId);
+        aptWorkflow.runWorkflow(ExampleWorkflow.class, 666, workflowId);
 
-        aptWorkflow.executor().signalWorkflow(workflowId, "OkToResume", true);
+        aptWorkflow.signalWorkflow(workflowId, "OkToResume", true);
 
         Awaitility.await().atMost(1, TimeUnit.MINUTES)
-                .until(() -> "666asdf".equals(aptWorkflow.executor().getWorkflowOutput(workflowId, String.class)));
-        System.out.println("done: " + aptWorkflow.executor().getWorkflowOutput(workflowId, String.class));
+                .until(() -> "666asdf".equals(aptWorkflow.getWorkflowOutput(workflowId, String.class)));
+        System.out.println("done: " + aptWorkflow.getWorkflowOutput(workflowId, String.class));
     }
 
 

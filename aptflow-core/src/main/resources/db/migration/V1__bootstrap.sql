@@ -80,18 +80,18 @@ CREATE TABLE event
     timestamp       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE OR REPLACE VIEW v_event_function_identifier AS
+CREATE OR REPLACE VIEW v_event_function_id AS
 (
-SELECT name AS identifier, started_event_id AS event_id
+SELECT name AS function_id, started_event_id AS event_id
 FROM activity
 UNION
-    SELECT name AS identifier, completed_event_id AS event_id
+    SELECT name AS function_id, completed_event_id AS event_id
     FROM activity
 UNION
-    SELECT identifier, waiting_event_id AS event_id
+    SELECT identifier AS function_id, waiting_event_id AS event_id
     FROM "condition"
 UNION
-    SELECT identifier, satisfied_event_id AS event_id
+    SELECT identifier AS function_id, satisfied_event_id AS event_id
     FROM "condition"
 UNION
     SELECT name, waiting_event_id AS event_id
@@ -100,25 +100,25 @@ UNION
     SELECT name, received_event_id AS event_id
     FROM signal
 UNION
-    SELECT identifier, started_event_id AS event_id
+    SELECT identifier AS function_id, started_event_id AS event_id
     FROM sleep
 UNION
-    SELECT identifier, completed_event_id AS event_id
+    SELECT identifier AS function_id, completed_event_id AS event_id
     FROM sleep
 UNION
-    SELECT id AS identifier, scheduled_event_id AS event_id
+    SELECT id AS function_id, scheduled_event_id AS event_id
     FROM workflow
 UNION
-   SELECT id AS identifier, started_event_id AS event_id
+   SELECT id AS function_id, started_event_id AS event_id
    FROM workflow
 UNION
-   SELECT id AS identifier, completed_event_id AS event_id
+   SELECT id AS function_id, completed_event_id AS event_id
    FROM workflow
 );
 
 CREATE OR REPLACE VIEW v_workflow_event as
 SELECT event.*,
-       vfi.identifier
+       vfi.function_id
 FROM event
-         INNER JOIN v_event_function_identifier vfi
+         INNER JOIN v_event_function_id vfi
                     ON event.id = vfi.event_id;
