@@ -16,12 +16,16 @@ import java.lang.reflect.Modifier;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 public class WorkflowExecutor {
 
-    public static final ThreadLocal<String> workflowId = new ThreadLocal<>();
     private static final FluentLogger logger = FluentLogger.forEnclosingClass();
+
+    private final ThreadLocal<ExecutionContext> executionContext = new ThreadLocal<>();
+
     private final Scheduler scheduler;
     private final WorkflowRepository workflowRepository;
 
@@ -71,13 +75,21 @@ public class WorkflowExecutor {
         this.scheduler.stop();
     }
 
+    public ExecutionContext getExecutionContext() {
+        ExecutionContext ctx = executionContext.get();
+        if (ctx == null) {
+            throw new IllegalStateException("No execution context available. This method cannot be called outside of a RunnableWorkflow.execute call stack");
+        }
+        return ctx;
+    }
+
     void executeWorkflow(String workflowId) {
         Workflow workflow = this.workflowRepository.getWorkflow(workflowId);
         try {
             RunnableWorkflow instance = instantiate(workflow.className());
-            WorkflowExecutor.workflowId.set(workflowId);
+            executionContext.set(new ExecutionContext(workflowId));
             Object output = instance.execute(workflow.input());
-            WorkflowExecutor.workflowId.remove();
+            executionContext.remove();
             this.workflowRepository.workflowCompleted(workflowId, output);
             logger.atInfo().log("Workflow [%s] is complete", workflowId);
         } catch (AwaitingSignalException e) {
@@ -148,6 +160,25 @@ public class WorkflowExecutor {
                 Instant.now());
         // TODO -- probably don't need to wait here as we already have a "scheduled" state of a workflow
         Awaitility.await().atMost(20, TimeUnit.SECONDS).until(() -> this.workflowRepository.hasWorkflowStarted(workflowId));
+    }
+
+    public <R extends Serializable> CompletableFuture<R> supplyAsync(Supplier<R> supplier) {
+        ExecutionContext ctx = this.getExecutionContext();
+        return CompletableFuture.supplyAsync(() -> {
+            this.executionContext.set(ctx);
+            R r = supplier.get();
+            this.executionContext.remove();
+            return r;
+        });
+    }
+
+    public CompletableFuture<Void> runAsync(Runnable runnable) {
+        ExecutionContext ctx = this.getExecutionContext();
+        return CompletableFuture.runAsync(() -> {
+            this.executionContext.set(ctx);
+            runnable.run();
+            this.executionContext.remove();
+        });
     }
 
 }

@@ -59,7 +59,7 @@ public class WorkflowFunctions {
     }
 
     private void _awaitCondition(String conditionIdentifier, Supplier<Boolean> conditionSupplier, Duration evaluationInterval) {
-        String workflowId = WorkflowExecutor.workflowId.get();
+        String workflowId = workflowExecutor.getExecutionContext().workflowId();
         String conditionKey = "condition::%s::%s".formatted(workflowId, conditionIdentifier);
         logger.atFine().log("processing condition [%s]", conditionKey);
         Condition condition = initializeCondition(workflowId, conditionIdentifier);
@@ -90,7 +90,7 @@ public class WorkflowFunctions {
     }
 
     private void _sleep(String identifier, Duration duration) {
-        String workflowId = WorkflowExecutor.workflowId.get();
+        String workflowId = workflowExecutor.getExecutionContext().workflowId();
         logger.atFine().log("processing workflow sleep [%s::%s]".formatted(workflowId, identifier));
         Sleep sleep = AptWorkflow.repository.getSleep(workflowId, identifier);
         if (sleep == null) {
@@ -110,26 +110,15 @@ public class WorkflowFunctions {
     }
 
     private <R extends Serializable> CompletableFuture<R> _async(Supplier<R> supplier) {
-        String workflowId = WorkflowExecutor.workflowId.get();
-        return CompletableFuture.supplyAsync(() -> {
-            WorkflowExecutor.workflowId.set(workflowId);
-            R r = supplier.get();
-            WorkflowExecutor.workflowId.remove();
-            return r;
-        });
+        return workflowExecutor.supplyAsync(supplier);
     }
 
     private CompletableFuture<Void> _async(Runnable runnable) {
-        String workflowId = WorkflowExecutor.workflowId.get();
-        return CompletableFuture.runAsync(() -> {
-            WorkflowExecutor.workflowId.set(workflowId);
-            runnable.run();
-            WorkflowExecutor.workflowId.remove();
-        });
+        return workflowExecutor.runAsync(runnable);
     }
 
     private <T> T _awaitSignal(String signalName, Class<T> returnType) {
-        String workflowId = WorkflowExecutor.workflowId.get();
+        String workflowId = workflowExecutor.getExecutionContext().workflowId();
         logger.atFine().log("processing signal [%s::%s]", workflowId, signalName);
         Signal signal = AptWorkflow.repository.getSignal(workflowId, signalName);
         if (signal == null) {
@@ -147,11 +136,7 @@ public class WorkflowFunctions {
     }
 
     <R extends Serializable> R _activity(String activityName, Supplier<R> supplier) {
-        //TODO -- encapsulate this call everywhere in the app and throw an absolute fit
-        // if we are running in a thread context that doesn't have this. It would be like
-        // crossing the streams bad if we don't have this.  Should also guard against it with
-        // a not null constraint in the db, but it would be good to have a graceful/informative failure
-        String workflowId = WorkflowExecutor.workflowId.get();
+        String workflowId = workflowExecutor.getExecutionContext().workflowId();
         Activity activity = initActivity(workflowId, activityName);
 
         if (activityHasAlreadyExecuted(activity)) {
@@ -164,7 +149,7 @@ public class WorkflowFunctions {
     }
 
     void _activity(String activityName, Runnable runnable) {
-        String workflowId = WorkflowExecutor.workflowId.get();
+        String workflowId = workflowExecutor.getExecutionContext().workflowId();
         Activity activity = initActivity(workflowId, activityName);
         if (activityHasAlreadyExecuted(activity)) {
             return;
