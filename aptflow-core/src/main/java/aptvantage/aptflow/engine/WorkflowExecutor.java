@@ -32,18 +32,21 @@ public class WorkflowExecutor {
     private final Set<Object> workflowDependencies;
 
     private final CompleteSleepTask completeSleepTask;
-    private final RunWorkflowTask runWorkflowTask;
+    private final ResumeStartedWorkflowTask resumeStartedWorkflowTask;
     private final SignalWorkflowTask signalWorkflowTask;
+    private final StartWorkflowTask startWorkflowTask;
 
     public WorkflowExecutor(DataSource dataSource, WorkflowRepository workflowRepository, Set<Object> workflowDependencies) {
         this.completeSleepTask = new CompleteSleepTask(workflowRepository, this);
-        this.runWorkflowTask = new RunWorkflowTask(workflowRepository, this);
+        this.resumeStartedWorkflowTask = new ResumeStartedWorkflowTask(this);
+        this.startWorkflowTask = new StartWorkflowTask(workflowRepository, this);
         this.signalWorkflowTask = new SignalWorkflowTask(workflowRepository, this);
         this.scheduler = Scheduler
                 .create(dataSource,
+                        startWorkflowTask,
                         completeSleepTask,
                         signalWorkflowTask,
-                        runWorkflowTask)
+                        resumeStartedWorkflowTask)
                 .pollingInterval(Duration.ofSeconds(1))
                 .enableImmediateExecution()
                 .build();
@@ -127,9 +130,9 @@ public class WorkflowExecutor {
     }
 
     public void scheduleReevaluation(String workflowId, String conditionId, Instant resumptionTime) {
-        StartWorkflowTaskInput input = new StartWorkflowTaskInput(workflowId);
+        RunWorkflowTaskInput input = new RunWorkflowTaskInput(workflowId);
         String taskInstanceId = "%s::%s::%s".formatted(workflowId, conditionId, UUID.randomUUID().toString());
-        scheduler.schedule(this.runWorkflowTask.instance(
+        scheduler.schedule(this.resumeStartedWorkflowTask.instance(
                 taskInstanceId, input), resumptionTime);
     }
 
@@ -153,9 +156,9 @@ public class WorkflowExecutor {
     public <P extends Serializable> void runWorkflow(Class<? extends RunnableWorkflow<?, P>> workflowClass, P workflowParam, String workflowId) {
         logger.atInfo().log("scheduling new workflow [%s] of type [%s]", workflowId, workflowClass.getName());
         this.workflowRepository.newWorkflowScheduled(workflowId, workflowClass, workflowParam);
-        TaskInstance<StartWorkflowTaskInput> instance = runWorkflowTask.instance(
+        TaskInstance<RunWorkflowTaskInput> instance = startWorkflowTask.instance(
                 "workflow::%s".formatted(workflowId),
-                new StartWorkflowTaskInput(workflowId));
+                new RunWorkflowTaskInput(workflowId));
         scheduler.schedule(instance,
                 Instant.now());
         // TODO -- probably don't need to wait here as we already have a "scheduled" state of a workflow

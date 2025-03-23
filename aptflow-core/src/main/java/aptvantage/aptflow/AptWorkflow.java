@@ -4,6 +4,8 @@ import aptvantage.aptflow.api.RunnableWorkflow;
 import aptvantage.aptflow.api.WorkflowFunctions;
 import aptvantage.aptflow.engine.WorkflowExecutor;
 import aptvantage.aptflow.engine.persistence.WorkflowRepository;
+import aptvantage.aptflow.model.Event;
+import aptvantage.aptflow.model.WorkflowStatus;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import org.flywaydb.core.Flyway;
@@ -14,6 +16,7 @@ import javax.sql.DataSource;
 import java.io.Serializable;
 import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 public class AptWorkflow {
@@ -45,6 +48,14 @@ public class AptWorkflow {
 
     public boolean isWorkflowCompleted(String workflowId) {
         return repository.getWorkflow(workflowId).isComplete();
+    }
+
+    public WorkflowStatus getWorkflowStatus(String workflowId) {
+        return repository.getWorkflowStatus(workflowId);
+    }
+
+    public List<Event> getWorkflowEvents(String workflowId) {
+        return repository.getWorkflowEvents(workflowId);
     }
 
     public void stop() {

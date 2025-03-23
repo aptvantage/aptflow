@@ -1,4 +1,4 @@
-package aptvantage.aptflow.util;
+package aptvantage.aptflow.examples;
 
 import aptvantage.aptflow.api.RunnableWorkflow;
 import aptvantage.aptflow.api.WorkflowFunctions;
@@ -7,16 +7,20 @@ import java.time.Duration;
 import java.time.temporal.ChronoUnit;
 import java.util.concurrent.CompletableFuture;
 
-public class ExampleWorkflowWithAsync implements RunnableWorkflow<String, Integer> {
+import static aptvantage.aptflow.api.WorkflowFunctions.activity;
+
+public class ExampleWorkflowWithAsyncActivities implements RunnableWorkflow<String, Integer> {
     @Override
     public String execute(Integer param) {
 
         CompletableFuture<String> twoSecondFuture = WorkflowFunctions.async(() ->
-                workForDurationAndEcho(Duration.of(2, ChronoUnit.SECONDS), "2-seconds")
+                activity("2-seconds", () ->
+                        workForDurationAndEcho(Duration.of(2, ChronoUnit.SECONDS), "2-seconds"))
         );
 
         CompletableFuture<String> oneSecondFuture = WorkflowFunctions.async(() ->
-                workForDurationAndEcho(Duration.of(1, ChronoUnit.SECONDS), "1-seconds")
+                activity("1-seconds", () ->
+                        workForDurationAndEcho(Duration.of(1, ChronoUnit.SECONDS), "1-seconds"))
         );
 
         try {
@@ -30,11 +34,11 @@ public class ExampleWorkflowWithAsync implements RunnableWorkflow<String, Intege
     }
 
     public String workForDurationAndEcho(Duration duration, String echo) {
-       try {
-           Thread.sleep(duration);
-           return echo;
-       } catch (InterruptedException e) {
-           throw new RuntimeException(e);
-       }
+        try {
+            Thread.sleep(duration);
+            return echo;
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

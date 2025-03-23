@@ -1,4 +1,4 @@
-package aptvantage.aptflow.util;
+package aptvantage.aptflow.examples;
 
 import aptvantage.aptflow.api.RunnableWorkflow;
 

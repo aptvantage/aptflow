@@ -13,6 +13,7 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import java.util.UUID;
 
 public class WorkflowRepository {
@@ -21,6 +22,8 @@ public class WorkflowRepository {
 
     private final SerializableColumnMapper serializableColumnMapper = new SerializableColumnMapper();
     private final InstantColumnMapper instantColumnMapper = new InstantColumnMapper();
+    private final EventCategoryMapper eventCategoryColumnMapper = new EventCategoryMapper();
+    private final EventStatusMapper eventStatusColumnMapper = new EventStatusMapper();
 
     public WorkflowRepository(Jdbi jdbi) {
         this.jdbi = jdbi;
@@ -114,14 +117,14 @@ public class WorkflowRepository {
                                         rs.getString("a_name"),
                                         serializableColumnMapper.map(rs, "a_output", ctx),
                                         new Event(
-                                                rs.getString("started_category"),
-                                                rs.getString("started_status"),
+                                                eventCategoryColumnMapper.map(rs, "started_category", ctx),
+                                                eventStatusColumnMapper.map(rs, "started_status", ctx),
                                                 rs.getString("a_name"),
                                                 instantColumnMapper.map(rs, "started_timestamp", ctx)
                                         ),
                                         new Event(
-                                                rs.getString("completed_category"),
-                                                rs.getString("completed_status"),
+                                                eventCategoryColumnMapper.map(rs, "completed_category", ctx),
+                                                eventStatusColumnMapper.map(rs, "completed_status", ctx),
                                                 rs.getString("a_name"),
                                                 instantColumnMapper.map(rs, "completed_timestamp", ctx)
                                         )
@@ -205,20 +208,100 @@ public class WorkflowRepository {
                                         rs.getString("s_name"),
                                         serializableColumnMapper.map(rs, "s_value", ctx),
                                         new Event(
-                                                rs.getString("waiting_category"),
-                                                rs.getString("waiting_status"),
+                                                eventCategoryColumnMapper.map(rs, "waiting_category", ctx),
+                                                eventStatusColumnMapper.map(rs, "waiting_status", ctx),
                                                 rs.getString("s_name"),
                                                 instantColumnMapper.map(rs, "waiting_timestamp", ctx)
                                         ),
                                         new Event(
-                                                rs.getString("received_category"),
-                                                rs.getString("received_status"),
+                                                eventCategoryColumnMapper.map(rs, "received_category", ctx),
+                                                eventStatusColumnMapper.map(rs, "received_status", ctx),
                                                 rs.getString("s_name"),
                                                 instantColumnMapper.map(rs, "received_timestamp", ctx)
                                         )
                                 ))
                         .findOne()
                         .orElse(null));
+    }
+
+    public WorkflowStatus getWorkflowStatus(String workflowId) {
+        EventStatus workflowStatus = getLatestEventStatus(workflowId, EventCategory.WORKFLOW);
+        List<Function> activeFunctions = getActiveFunctions(workflowId);
+        //TODO -- provide failed functions
+        return new WorkflowStatus(workflowStatus, activeFunctions, null);
+
+    }
+
+    List<Function> getActiveFunctions(String workflowId) {
+        return jdbi.withHandle(handle ->
+                handle.createQuery("""
+                                SELECT
+                                    function_id,
+                                    category,
+                                    started,
+                                    completed
+                                FROM
+                                    v_workflow_function
+                                WHERE
+                                    workflow_id = :workflowId
+                                    AND completed is null
+                                ORDER BY started
+                                """)
+                        .bind("workflowId", workflowId)
+                        .map((rs, ctx) ->
+                                new Function(
+                                        rs.getString("function_id"),
+                                        eventCategoryColumnMapper.map(rs, "category", ctx),
+                                        instantColumnMapper.map(rs, "started", ctx),
+                                        null //always null because of the sql query
+                                ))
+                        .collectIntoList()
+        );
+    }
+
+    EventStatus getLatestEventStatus(String workflowId, EventCategory category) {
+        return jdbi.withHandle(handle ->
+                handle.createQuery("""
+                                SELECT status
+                                FROM event
+                                WHERE workflow_id = :workflowId
+                                    AND category = :category
+                                ORDER BY timestamp DESC
+                                LIMIT 1
+                                """)
+                        .bind("workflowId", workflowId)
+                        .bind("category", category)
+                        .map((rs, ctx) ->
+                                EventStatus.valueOf(rs.getString("status")))
+                        .findOne()
+                        .orElse(null)
+        );
+    }
+
+    public List<Event> getWorkflowEvents(String workflowId) {
+        return jdbi.withHandle(handle ->
+                handle.createQuery("""
+                                SELECT 
+                                    id,
+                                    workflow_id,
+                                    category,
+                                    status,
+                                    timestamp,
+                                    function_id
+                                FROM v_workflow_event
+                                WHERE workflow_id = :workflowId
+                                ORDER BY timestamp 
+                                """)
+                        .bind("workflowId", workflowId)
+                        .map((rs, ctx) ->
+                                new Event(
+                                        eventCategoryColumnMapper.map(rs, "category", ctx),
+                                        eventStatusColumnMapper.map(rs, "status", ctx),
+                                        rs.getString("function_id"),
+                                        instantColumnMapper.map(rs, "timestamp", ctx)
+                                ))
+                        .collectIntoList()
+        );
     }
 
     public Workflow getWorkflow(String workflowId) {
@@ -257,20 +340,20 @@ public class WorkflowRepository {
                                         serializableColumnMapper.map(rs, "w_output", ctx),
                                         instantColumnMapper.map(rs, "w_created", ctx),
                                         new Event(
-                                                rs.getString("scheduled_category"),
-                                                rs.getString("scheduled_status"),
+                                                eventCategoryColumnMapper.map(rs, "scheduled_category", ctx),
+                                                eventStatusColumnMapper.map(rs, "scheduled_status", ctx),
                                                 rs.getString("w_id"),
                                                 instantColumnMapper.map(rs, "scheduled_timestamp", ctx)
                                         ),
                                         new Event(
-                                                rs.getString("started_category"),
-                                                rs.getString("started_status"),
+                                                eventCategoryColumnMapper.map(rs, "started_category", ctx),
+                                                eventStatusColumnMapper.map(rs, "started_status", ctx),
                                                 rs.getString("w_id"),
                                                 instantColumnMapper.map(rs, "started_timestamp", ctx)
                                         ),
                                         new Event(
-                                                rs.getString("completed_category"),
-                                                rs.getString("completed_status"),
+                                                eventCategoryColumnMapper.map(rs, "completed_category", ctx),
+                                                eventStatusColumnMapper.map(rs, "completed_status", ctx),
                                                 rs.getString("w_id"),
                                                 instantColumnMapper.map(rs, "completed_timestamp", ctx)
                                         )
@@ -419,14 +502,14 @@ public class WorkflowRepository {
                                         rs.getString("c_workflow_id"),
                                         rs.getString("c_identifier"),
                                         new Event(
-                                                rs.getString("waiting_category"),
-                                                rs.getString("waiting_status"),
+                                                eventCategoryColumnMapper.map(rs, "waiting_category", ctx),
+                                                eventStatusColumnMapper.map(rs, "waiting_status", ctx),
                                                 rs.getString("c_identifier"),
                                                 instantColumnMapper.map(rs, "waiting_timestamp", ctx)
                                         ),
                                         new Event(
-                                                rs.getString("satisfied_category"),
-                                                rs.getString("satisfied_status"),
+                                                eventCategoryColumnMapper.map(rs, "satisfied_category", ctx),
+                                                eventStatusColumnMapper.map(rs, "satisfied_status", ctx),
                                                 rs.getString("c_identifier"),
                                                 instantColumnMapper.map(rs, "satisfied_timestamp", ctx)
                                         )
@@ -496,14 +579,14 @@ public class WorkflowRepository {
                                         rs.getString("s_identifier"),
                                         Duration.ofMillis(rs.getLong("s_duration_in_millis")),
                                         new Event(
-                                                rs.getString("started_category"),
-                                                rs.getString("started_status"),
+                                                eventCategoryColumnMapper.map(rs, "started_category", ctx),
+                                                eventStatusColumnMapper.map(rs, "started_status", ctx),
                                                 rs.getString("s_identifier"),
                                                 instantColumnMapper.map(rs, "started_timestamp", ctx)
                                         ),
                                         new Event(
-                                                rs.getString("completed_category"),
-                                                rs.getString("completed_status"),
+                                                eventCategoryColumnMapper.map(rs, "completed_category", ctx),
+                                                eventStatusColumnMapper.map(rs, "completed_status", ctx),
                                                 rs.getString("s_identifier"),
                                                 instantColumnMapper.map(rs, "completed_timestamp", ctx)
                                         )
@@ -526,6 +609,30 @@ public class WorkflowRepository {
             } catch (IOException | ClassNotFoundException e) {
                 throw new RuntimeException(e);
             }
+        }
+    }
+
+    static class EventCategoryMapper implements ColumnMapper<EventCategory> {
+
+        @Override
+        public EventCategory map(ResultSet r, int columnNumber, StatementContext ctx) throws SQLException {
+            String stringValue = r.getString(columnNumber);
+            if (stringValue == null) {
+                return null;
+            }
+            return EventCategory.valueOf(stringValue);
+        }
+    }
+
+    public static class EventStatusMapper implements ColumnMapper<EventStatus> {
+
+        @Override
+        public EventStatus map(ResultSet r, int columnNumber, StatementContext ctx) throws SQLException {
+            String stringValue = r.getString(columnNumber);
+            if (stringValue == null) {
+                return null;
+            }
+            return EventStatus.valueOf(stringValue);
         }
     }
 

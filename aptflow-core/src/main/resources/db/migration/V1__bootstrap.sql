@@ -22,65 +22,66 @@ CREATE INDEX last_heartbeat_idx ON scheduled_tasks (last_heartbeat);
 -- tables for nimble workflow
 CREATE TABLE workflow
 (
-    id                  VARCHAR PRIMARY KEY,
-    scheduled_event_id  VARCHAR,
-    started_event_id    VARCHAR,
-    completed_event_id  VARCHAR,
-    class_name          VARCHAR,
-    input               bytea,
-    output              bytea,
-    created             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    id                 VARCHAR PRIMARY KEY,
+    scheduled_event_id VARCHAR,
+    started_event_id   VARCHAR,
+    completed_event_id VARCHAR,
+    class_name         VARCHAR,
+    input              bytea,
+    output             bytea,
+    created            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE activity
 (
-    workflow_id         VARCHAR NOT NULL,
-    name                VARCHAR NOT NULL,
-    started_event_id    VARCHAR,
-    completed_event_id  VARCHAR,
-    output              bytea,
-    created             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    workflow_id        VARCHAR   NOT NULL,
+    name               VARCHAR   NOT NULL,
+    started_event_id   VARCHAR,
+    completed_event_id VARCHAR,
+    output             bytea,
+    created            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE signal
 (
-    workflow_id         VARCHAR NOT NULL,
-    name                VARCHAR NOT NULL,
-    waiting_event_id    VARCHAR,
-    received_event_id   VARCHAR,
-    value               bytea,
-    created             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    workflow_id       VARCHAR   NOT NULL,
+    name              VARCHAR   NOT NULL,
+    waiting_event_id  VARCHAR,
+    received_event_id VARCHAR,
+    value             bytea,
+    created           TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE condition
 (
-    workflow_id         VARCHAR NOT NULL,
-    identifier          VARCHAR NOT NULL,
-    waiting_event_id    VARCHAR,
-    satisfied_event_id  VARCHAR,
-    created             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    workflow_id        VARCHAR   NOT NULL,
+    identifier         VARCHAR   NOT NULL,
+    waiting_event_id   VARCHAR,
+    satisfied_event_id VARCHAR,
+    created            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE sleep
 (
-    workflow_id         VARCHAR NOT NULL,
-    identifier          VARCHAR NOT NULL,
-    started_event_id    VARCHAR,
-    completed_event_id  VARCHAR,
-    duration_in_millis  bigint,
-    created             TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    workflow_id        VARCHAR   NOT NULL,
+    identifier         VARCHAR   NOT NULL,
+    started_event_id   VARCHAR,
+    completed_event_id VARCHAR,
+    duration_in_millis bigint,
+    created            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE event
 (
-    id              VARCHAR PRIMARY KEY,
-    workflow_id     VARCHAR NOT NULL,
-    category        VARCHAR,
-    status          VARCHAR,
-    timestamp       TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    id          VARCHAR PRIMARY KEY,
+    workflow_id VARCHAR   NOT NULL,
+    category    VARCHAR,
+    status      VARCHAR,
+    timestamp   TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE OR REPLACE VIEW v_event_function_id AS
+CREATE
+OR REPLACE VIEW v_event_function_id AS
 (
 SELECT name AS function_id, started_event_id AS event_id
 FROM activity
@@ -116,9 +117,58 @@ UNION
    FROM workflow
 );
 
-CREATE OR REPLACE VIEW v_workflow_event as
+CREATE
+OR REPLACE VIEW v_workflow_event as
 SELECT event.*,
        vfi.function_id
 FROM event
          INNER JOIN v_event_function_id vfi
                     ON event.id = vfi.event_id;
+
+
+CREATE
+OR REPLACE VIEW v_workflow_function AS (
+SELECT
+    a.workflow_id,
+    a.name AS function_id,
+    'ACTIVITY' AS category,
+    started.timestamp AS started,
+    completed.timestamp AS completed
+FROM activity a
+LEFT JOIN event started on a.started_event_id = started.id
+LEFT JOIN event completed on a.completed_event_id = completed.id
+
+UNION
+SELECT
+    c.workflow_id,
+    c.identifier AS function_id,
+    'CONDITION' AS category,
+    started.timestamp AS started,
+    completed.timestamp AS completed
+FROM "condition" c
+LEFT JOIN event started on c.waiting_event_id = started.id
+LEFT JOIN event completed on c.satisfied_event_id = completed.id
+
+UNION
+SELECT
+    s.workflow_id,
+    s.name AS function_id,
+    'SIGNAL' AS category,
+    started.timestamp AS started,
+    completed.timestamp AS completed
+FROM signal s
+         LEFT JOIN event started on s.waiting_event_id = started.id
+         LEFT JOIN event completed on s.received_event_id = completed.id
+
+UNION
+SELECT
+    s.workflow_id,
+    s.identifier AS function_id,
+    'SLEEP' AS category,
+    started.timestamp AS started,
+    completed.timestamp AS completed
+FROM sleep s
+         LEFT JOIN event started on s.started_event_id = started.id
+         LEFT JOIN event completed on s.completed_event_id = completed.id
+
+);
