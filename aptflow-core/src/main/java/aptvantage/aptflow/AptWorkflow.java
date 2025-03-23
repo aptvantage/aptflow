@@ -51,7 +51,8 @@ public class AptWorkflow {
     }
 
     public void stop() {
-        builder.stop();
+       this.workflowExecutor.stop();
+       this.builder.stop();
     }
 
     public static class AptWorkflowBuilder {
@@ -60,7 +61,6 @@ public class AptWorkflow {
         private DataSource dataSource;
 
         private boolean managedDataSource = false;
-        private Scheduler scheduler;
 
         private AptWorkflowBuilder() {
         }
@@ -108,20 +108,16 @@ public class AptWorkflow {
             //TODO -- null check this.dataSource
             runDatabaseMigration(this.dataSource);
 
-
-            this.scheduler = initializeScheduler(this.dataSource,
-                    WorkflowExecutor.RUN_WORKFLOW_TASK,
-                    WorkflowExecutor.SIGNAL_WORKFLOW_TASK,
-                    WorkflowExecutor.COMPLETE_SLEEP_TASK);
-
-            WorkflowExecutor.initialize(this.workflowDependencies);
-            WorkflowExecutor executor = new WorkflowExecutor(scheduler);
-
             AptWorkflow.repository = new WorkflowRepository(Jdbi.create(this.dataSource));
-            WorkflowFunctions.initialize(scheduler);
+            WorkflowExecutor executor = new WorkflowExecutor(
+                    this.dataSource,
+                    AptWorkflow.repository,
+                    workflowDependencies);
+
+            WorkflowFunctions.initialize(executor);
 
             // start this (last) after the rest of the app is completely initialized
-            this.scheduler.start();
+            executor.start();
             return new AptWorkflow(executor, this);
         }
 
@@ -136,7 +132,6 @@ public class AptWorkflow {
         }
 
         public void stop() {
-            this.scheduler.stop();
             if (managedDataSource) {
                 ((HikariDataSource) this.dataSource).close();
             }

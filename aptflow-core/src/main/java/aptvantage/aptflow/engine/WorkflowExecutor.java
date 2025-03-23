@@ -1,24 +1,21 @@
 package aptvantage.aptflow.engine;
 
 import aptvantage.aptflow.api.RunnableWorkflow;
+import aptvantage.aptflow.engine.persistence.WorkflowRepository;
 import aptvantage.aptflow.model.Workflow;
 import com.github.kagkarlsson.scheduler.Scheduler;
 import com.github.kagkarlsson.scheduler.task.TaskInstance;
-import com.github.kagkarlsson.scheduler.task.helper.OneTimeTask;
-import com.github.kagkarlsson.scheduler.task.helper.Tasks;
 import com.google.common.flogger.FluentLogger;
-import aptvantage.aptflow.AptWorkflow;
 import org.awaitility.Awaitility;
 
+import javax.sql.DataSource;
 import java.io.Serializable;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Modifier;
+import java.time.Duration;
 import java.time.Instant;
-import java.util.Arrays;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 public class WorkflowExecutor {
@@ -28,48 +25,46 @@ public class WorkflowExecutor {
     public static final ThreadLocal<String> workflowId = new ThreadLocal<>();
 
     private final Scheduler scheduler;
+    private final WorkflowRepository workflowRepository;
 
-    private static Set<Object> workflowDependencies;
+    private final Set<Object> workflowDependencies;
 
-    public WorkflowExecutor(Scheduler scheduler) {
-        this.scheduler = scheduler;
-    }
-    public static final OneTimeTask<CompleteSleepTaskInput> COMPLETE_SLEEP_TASK = Tasks.oneTime("CompleteSleepTask", CompleteSleepTaskInput.class)
-            .execute((inst, ctx) -> {
-                CompleteSleepTaskInput data = inst.getData();
-                AptWorkflow.repository.sleepCompleted(data.workflowId(), data.sleepIdentifier());
-                resumeExecution(data.workflowId());
-            });
-    public static final OneTimeTask<SignalWorkflowTaskInput> SIGNAL_WORKFLOW_TASK = Tasks.oneTime("SignalWorkflowTask", SignalWorkflowTaskInput.class)
-            .execute((inst, ctx) -> {
-                SignalWorkflowTaskInput data = inst.getData();
-                AptWorkflow.repository.signalReceived(data.workflowId(), data.signalName(), data.signalValue());
-                resumeExecution(data.workflowId());
-            });
-    public static final OneTimeTask<StartWorkflowTaskInput> RUN_WORKFLOW_TASK = Tasks.oneTime("RunWorkflowTask", StartWorkflowTaskInput.class)
-            .onFailure((executionComplete, executionOperations) -> {
-                //TODO - this should truly be an edge case (eg, exception handling had an unhandled exception,
-                // but we still shouldn't die in silence
-                executionOperations.remove();
-            })
-            .execute((inst, ctx) -> {
-                StartWorkflowTaskInput data = inst.getData();
-                AptWorkflow.repository.workflowStarted(data.workflowId());
-                resumeExecution(data.workflowId());
-            });
+    private final CompleteSleepTask completeSleepTask;
+    private final RunWorkflowTask runWorkflowTask;
+    private final SignalWorkflowTask signalWorkflowTask;
 
-    public static void initialize(Set<Object> workflowDependencies) {
-        WorkflowExecutor.workflowDependencies = workflowDependencies;
+    public WorkflowExecutor(DataSource dataSource, WorkflowRepository workflowRepository, Set<Object> workflowDependencies) {
+        this.completeSleepTask = new CompleteSleepTask(workflowRepository, this);
+        this.runWorkflowTask = new RunWorkflowTask(workflowRepository, this);
+        this.signalWorkflowTask = new SignalWorkflowTask(workflowRepository, this);
+        this.scheduler = Scheduler
+                .create(dataSource,
+                        completeSleepTask,
+                        signalWorkflowTask,
+                        runWorkflowTask)
+                .pollingInterval(Duration.ofSeconds(1))
+                .enableImmediateExecution()
+                .build();
+        this.workflowRepository = workflowRepository;
+        this.workflowDependencies = workflowDependencies;
     }
 
-    private static void resumeExecution(String workflowId) {
-        Workflow workflow = AptWorkflow.repository.getWorkflow(workflowId);
+    public void start() {
+        this.scheduler.start();
+    }
+
+    public void stop() {
+        this.scheduler.stop();
+    }
+
+    void executeWorkflow(String workflowId) {
+        Workflow workflow = this.workflowRepository.getWorkflow(workflowId);
         try {
             RunnableWorkflow instance = instantiate(workflow.className());
             WorkflowExecutor.workflowId.set(workflowId);
             Object output = instance.execute(workflow.input());
             WorkflowExecutor.workflowId.remove();
-            AptWorkflow.repository.workflowCompleted(workflowId, output);
+            this.workflowRepository.workflowCompleted(workflowId, output);
             logger.atInfo().log("Workflow [%s] is complete", workflowId);
         } catch (AwaitingSignalException e) {
             logger.atInfo().log("Pausing execution of workflow [%s] to wait for signal [%s]", workflowId, e.getSignal());
@@ -86,7 +81,7 @@ public class WorkflowExecutor {
         }
     }
 
-    private static RunnableWorkflow instantiate(String className) {
+    private RunnableWorkflow instantiate(String className) {
         try {
             Class workflowClass = Class.forName(className);
             Constructor constructor = findInjectableConstructor(workflowClass);
@@ -118,28 +113,43 @@ public class WorkflowExecutor {
         if (list.size() == 1) {
             return list.get(0);
         }
-        throw new RuntimeException("still need to handle multiple constructors with @Inject");
+        throw new UnsupportedOperationException("still need to handle multiple constructors with @Inject");
+    }
+
+    public void scheduleReevaluation(String workflowId, String conditionId, Instant resumptionTime) {
+        StartWorkflowTaskInput input = new StartWorkflowTaskInput(workflowId);
+        String taskInstanceId = "%s::%s::%s".formatted(workflowId, conditionId, UUID.randomUUID().toString());
+        scheduler.schedule(this.runWorkflowTask.instance(
+                taskInstanceId, input), resumptionTime);
+    }
+
+    public void scheduleWakeUp(String workflowId, String sleepId, Instant wakeupTime) {
+        CompleteSleepTaskInput input = new CompleteSleepTaskInput(workflowId, sleepId);
+        scheduler.schedule(this.completeSleepTask.instance(
+                "sleep::%s::%s".formatted(workflowId, sleepId), input
+        ), wakeupTime);
     }
 
     public <T extends Serializable> void signalWorkflow(String workflowId, String signalName, T signalValue) {
         logger.atInfo().log("received signal [%s::%s]", workflowId, signalName);
-        TaskInstance<SignalWorkflowTaskInput> instance = SIGNAL_WORKFLOW_TASK.instance(
+        TaskInstance<SignalWorkflowTaskInput> instance = signalWorkflowTask.instance(
                 "signal::%s::%s".formatted(workflowId, signalName),
                 new SignalWorkflowTaskInput(workflowId, signalName, signalValue));
         scheduler.schedule(instance, Instant.now());
-        Awaitility.await().atMost(20, TimeUnit.SECONDS).until(() -> AptWorkflow.repository.isSignalReceived(workflowId, signalName));
-
+        //TODO - track signal sent in addition to signal received
+        Awaitility.await().atMost(20, TimeUnit.SECONDS).until(() -> this.workflowRepository.isSignalReceived(workflowId, signalName));
     }
 
     public <P extends Serializable> void runWorkflow(Class<? extends RunnableWorkflow<?, P>> workflowClass, P workflowParam, String workflowId) {
         logger.atInfo().log("scheduling new workflow [%s] of type [%s]", workflowId, workflowClass.getName());
-        AptWorkflow.repository.newWorkflowScheduled(workflowId, workflowClass, workflowParam);
-        TaskInstance<StartWorkflowTaskInput> instance = RUN_WORKFLOW_TASK.instance(
+        this.workflowRepository.newWorkflowScheduled(workflowId, workflowClass, workflowParam);
+        TaskInstance<StartWorkflowTaskInput> instance = runWorkflowTask.instance(
                 "workflow::%s".formatted(workflowId),
                 new StartWorkflowTaskInput(workflowId));
         scheduler.schedule(instance,
                 Instant.now());
-        Awaitility.await().atMost(20, TimeUnit.SECONDS).until(() -> AptWorkflow.repository.hasWorkflowStarted(workflowId));
+        // TODO -- probably don't need to wait here as we already have a "scheduled" state of a workflow
+        Awaitility.await().atMost(20, TimeUnit.SECONDS).until(() -> this.workflowRepository.hasWorkflowStarted(workflowId));
     }
 
 }

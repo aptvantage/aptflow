@@ -6,7 +6,6 @@ import aptvantage.aptflow.model.Activity;
 import aptvantage.aptflow.model.Condition;
 import aptvantage.aptflow.model.Signal;
 import aptvantage.aptflow.model.Sleep;
-import com.github.kagkarlsson.scheduler.Scheduler;
 import com.google.common.flogger.FluentLogger;
 
 import java.io.Serializable;
@@ -21,14 +20,14 @@ public class WorkflowFunctions {
     private static final FluentLogger logger = FluentLogger.forEnclosingClass();
 
     private static WorkflowFunctions SINGLETON = null;
-    private final Scheduler scheduler;
+    private final WorkflowExecutor workflowExecutor;
 
-    public WorkflowFunctions(Scheduler scheduler) {
-        this.scheduler = scheduler;
+    public WorkflowFunctions(WorkflowExecutor workflowExecutor) {
+        this.workflowExecutor = workflowExecutor;
     }
 
-    public static void initialize(Scheduler scheduler) {
-        SINGLETON = new WorkflowFunctions(scheduler);
+    public static void initialize(WorkflowExecutor workflowExecutor) {
+        SINGLETON = new WorkflowFunctions(workflowExecutor);
     }
 
     public static void sleep(String identifier, Duration duration) {
@@ -62,7 +61,7 @@ public class WorkflowFunctions {
 
     private void _awaitCondition(String conditionIdentifier, Supplier<Boolean> conditionSupplier, Duration evaluationInterval) {
         String workflowId = WorkflowExecutor.workflowId.get();
-        String conditionKey = "condition::%s::%s::%s".formatted(workflowId, conditionIdentifier, UUID.randomUUID().toString());
+        String conditionKey = "condition::%s::%s".formatted(workflowId, conditionIdentifier);
         logger.atFine().log("processing condition [%s]", conditionKey);
         Condition condition = initializeCondition(workflowId, conditionIdentifier);
         if (condition.isSatisfied()) {
@@ -76,9 +75,8 @@ public class WorkflowFunctions {
             return;
         }
         logger.atInfo().log("Scheduling reevaluation of condition [%s] of workflow [%s] in [%s]", conditionIdentifier, workflowId, evaluationInterval);
-        StartWorkflowTaskInput input = new StartWorkflowTaskInput(workflowId);
-        scheduler.schedule(WorkflowExecutor.RUN_WORKFLOW_TASK.instance(
-                conditionKey, input), Instant.now().plus(evaluationInterval));
+        this.workflowExecutor.scheduleReevaluation(workflowId, conditionIdentifier, Instant.now().plus(evaluationInterval));
+
         throw new ConditionNotSatisfiedException(conditionIdentifier);
 
     }
@@ -99,10 +97,7 @@ public class WorkflowFunctions {
         if (sleep == null) {
             AptWorkflow.repository.newSleepStarted(workflowId, identifier, duration);
             logger.atInfo().log("scheduling wake-up-call for sleep [%s::%s] in [%s]", workflowId, identifier, duration);
-            CompleteSleepTaskInput input = new CompleteSleepTaskInput(workflowId, identifier);
-            scheduler.schedule(WorkflowExecutor.COMPLETE_SLEEP_TASK.instance(
-                    "sleep::%s::".formatted(workflowId, identifier), input
-            ), Instant.now().plus(duration));
+            this.workflowExecutor.scheduleWakeUp(workflowId, identifier, Instant.now().plus(duration));
             throw new WorkflowSleepingException(identifier, duration);
         }
         if (sleep.isCompleted()) {
