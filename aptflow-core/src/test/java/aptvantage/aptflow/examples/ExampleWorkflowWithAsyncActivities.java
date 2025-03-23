@@ -35,7 +35,7 @@ public class ExampleWorkflowWithAsyncActivities implements RunnableWorkflow<Stri
 
     public String workForDurationAndEcho(Duration duration, String echo) {
         try {
-            Thread.sleep(duration);
+            Thread.sleep(duration.toMillis());
             return echo;
         } catch (InterruptedException e) {
             throw new RuntimeException(e);

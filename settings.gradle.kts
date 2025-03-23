@@ -1,4 +1,4 @@
 rootProject.name = "aptflow"
 
-include( "aptflow-core")
+include("aptflow-core")
 

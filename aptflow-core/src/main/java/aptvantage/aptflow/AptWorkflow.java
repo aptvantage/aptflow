@@ -9,7 +9,6 @@ import aptvantage.aptflow.model.WorkflowStatus;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import org.flywaydb.core.Flyway;
-import org.flywaydb.core.api.output.MigrateResult;
 import org.jdbi.v3.core.Jdbi;
 
 import javax.sql.DataSource;
@@ -42,7 +41,7 @@ public class AptWorkflow {
         this.workflowExecutor.runWorkflow(workflowClass, workflowParam, workflowId);
     }
 
-    public <R> R getWorkflowOutput(String workflowId, Class<R> outputClass) {
+    public <R> R getWorkflowOutput(String workflowId, @SuppressWarnings("unused") Class<R> outputClass) {
         return (R) repository.getWorkflow(workflowId).output();
     }
 
@@ -74,7 +73,7 @@ public class AptWorkflow {
         }
 
         private static void runDatabaseMigration(DataSource dataSource) {
-            MigrateResult migrate = Flyway.configure()
+            Flyway.configure()
                     .baselineVersion("0")
                     .baselineOnMigrate(true)
                     .dataSource(dataSource)

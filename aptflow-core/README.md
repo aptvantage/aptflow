@@ -1,4 +1,4 @@
-Release with: `./gradlew publishAndReleaseToMavenCentral --no-configuration-cache` 
+Release with: `./gradlew publishAndReleaseToMavenCentral --no-configuration-cache`
 
 Note: credentials must first be set in `~/.gradle/gradle.properties`
 

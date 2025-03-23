@@ -66,7 +66,7 @@ public class WorkflowRepository {
                             UPDATE activity
                             SET output = :output,
                                 completed_event_id = :eventId
-                            WHERE workflow_id = :workflowId and name = :name                            
+                            WHERE workflow_id = :workflowId and name = :name
                             """)
                     .bind("workflowId", workflowId)
                     .bind("name", name)
@@ -158,7 +158,7 @@ public class WorkflowRepository {
                             UPDATE signal
                             SET value = :value,
                                 received_event_id = :eventId
-                            WHERE workflow_id = :workflowId and name = :name                            
+                            WHERE workflow_id = :workflowId and name = :name
                             """)
                     .bind("workflowId", workflowId)
                     .bind("name", name)
@@ -281,7 +281,7 @@ public class WorkflowRepository {
     public List<Event> getWorkflowEvents(String workflowId) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
-                                SELECT 
+                                SELECT
                                     id,
                                     workflow_id,
                                     category,
@@ -290,7 +290,7 @@ public class WorkflowRepository {
                                     function_id
                                 FROM v_workflow_event
                                 WHERE workflow_id = :workflowId
-                                ORDER BY timestamp 
+                                ORDER BY timestamp
                                 """)
                         .bind("workflowId", workflowId)
                         .map((rs, ctx) ->
@@ -307,7 +307,7 @@ public class WorkflowRepository {
     public Workflow getWorkflow(String workflowId) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
-                                SELECT 
+                                SELECT
                                     w.id as w_id,
                                     w.class_name as w_class_name,
                                     w.input as w_input,
@@ -478,9 +478,9 @@ public class WorkflowRepository {
     public Condition getCondition(String workflowId, String identifier) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
-                                SELECT 
+                                SELECT
                                     c.workflow_id AS c_workflow_id,
-                                    c.identifier AS c_identifier,                                                                 
+                                    c.identifier AS c_identifier,
                                     waiting.timestamp AS waiting_timestamp,
                                     waiting.category AS waiting_category,
                                     waiting.status AS waiting_status,
@@ -492,7 +492,7 @@ public class WorkflowRepository {
                                     ON c.waiting_event_id = waiting.id
                                   LEFT JOIN event satisfied
                                     ON c.satisfied_event_id = satisfied.id
-                                WHERE c.workflow_id = :workflowId 
+                                WHERE c.workflow_id = :workflowId
                                     AND c.identifier = :identifier
                                 """)
                         .bind("workflowId", workflowId)
@@ -553,10 +553,10 @@ public class WorkflowRepository {
     public Sleep getSleep(String workflowId, String identifier) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
-                                SELECT 
+                                SELECT
                                     s.workflow_id AS s_workflow_id,
                                     s.identifier AS s_identifier,
-                                    s.duration_in_millis AS s_duration_in_millis,                                    
+                                    s.duration_in_millis AS s_duration_in_millis,
                                     started.timestamp AS started_timestamp,
                                     started.category AS started_category,
                                     started.status AS started_status,
@@ -568,7 +568,7 @@ public class WorkflowRepository {
                                     ON s.started_event_id = started.id
                                   LEFT JOIN event completed
                                     ON s.completed_event_id = completed.id
-                                WHERE s.workflow_id = :workflowId 
+                                WHERE s.workflow_id = :workflowId
                                     AND s.identifier = :identifier
                                 """)
                         .bind("workflowId", workflowId)

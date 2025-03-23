@@ -9,7 +9,8 @@ import static aptvantage.aptflow.api.WorkflowFunctions.*;
 
 public class ExampleWorkflowWithNestedActivities implements RunnableWorkflow<Integer, String> {
 
-    static AtomicInteger execCount = new AtomicInteger(0);
+    static final AtomicInteger execCount = new AtomicInteger(0);
+
     @Override
     public Integer execute(String param) {
 

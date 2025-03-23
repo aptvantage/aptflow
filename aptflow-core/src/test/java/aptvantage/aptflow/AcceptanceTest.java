@@ -21,7 +21,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class AcceptanceTest {
 
     @Container
-    private static final PostgreSQLContainer postgresqlContainer = new PostgreSQLContainer()
+    private static final PostgreSQLContainer postgresqlContainer = new PostgreSQLContainer("postgres")
             .withDatabaseName("test-database")
             .withUsername("test-user")
             .withPassword("test-password");
@@ -135,6 +135,19 @@ public class AcceptanceTest {
         return event.category() == category && event.status() == status;
     }
 
+    @Test
+    public void test() throws Exception {
+
+        String workflowId = "test-workflow";
+        aptWorkflow.runWorkflow(ExampleWorkflow.class, 666, workflowId);
+
+        aptWorkflow.signalWorkflow(workflowId, "OkToResume", true);
+
+        Awaitility.await().atMost(1, TimeUnit.MINUTES)
+                .until(() -> "666asdf".equals(aptWorkflow.getWorkflowOutput(workflowId, String.class)));
+        System.out.println("done: " + aptWorkflow.getWorkflowOutput(workflowId, String.class));
+    }
+
     @Nested
     @DisplayName("Activity Tests")
     class ActivityTests {
@@ -199,20 +212,6 @@ public class AcceptanceTest {
 
         }
 
-    }
-
-
-    @Test
-    public void test() throws Exception {
-
-        String workflowId = "test-workflow";
-        aptWorkflow.runWorkflow(ExampleWorkflow.class, 666, workflowId);
-
-        aptWorkflow.signalWorkflow(workflowId, "OkToResume", true);
-
-        Awaitility.await().atMost(1, TimeUnit.MINUTES)
-                .until(() -> "666asdf".equals(aptWorkflow.getWorkflowOutput(workflowId, String.class)));
-        System.out.println("done: " + aptWorkflow.getWorkflowOutput(workflowId, String.class));
     }
 
 

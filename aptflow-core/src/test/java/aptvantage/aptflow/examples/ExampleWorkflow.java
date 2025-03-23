@@ -11,13 +11,20 @@ import static aptvantage.aptflow.api.WorkflowFunctions.*;
 
 public class ExampleWorkflow implements RunnableWorkflow<String, Integer> {
 
+    private static final AtomicInteger conditionCheckCount = new AtomicInteger(0);
     private final ExampleService service;
-
-    private static AtomicInteger conditionCheckCount = new AtomicInteger(0);
 
     public ExampleWorkflow(ExampleService service) {
 
         this.service = service;
+    }
+
+    static void sleepForMillis(long millis) {
+        try {
+            Thread.sleep(millis);
+        } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Override
@@ -27,7 +34,7 @@ public class ExampleWorkflow implements RunnableWorkflow<String, Integer> {
 
         boolean okToResume = awaitSignal("OkToResume", Boolean.class);
 
-        System.out.println("received signal to resume [%s]".formatted(okToResume));
+        System.out.printf("received signal to resume [%s]%n", okToResume);
 
         activity("Work for between 1 and 5 seconds", service::doSomeWork);
 
@@ -51,14 +58,6 @@ public class ExampleWorkflow implements RunnableWorkflow<String, Integer> {
         }
 
         return concatenated;
-    }
-
-    static void sleepForMillis(long millis) {
-        try {
-            Thread.sleep(millis);
-        } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-        }
     }
 
 }

@@ -5,6 +5,9 @@ plugins {
 
 java {
     withSourcesJar()
+    toolchain {
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
 }
 
 val jacksonVersion = "2.17.2"
