@@ -65,7 +65,7 @@ public class AcceptanceTest {
                 .until(() -> aptWorkflow.isWorkflowCompleted(workflowId));
 
         // and the expected output is correct
-        String output = aptWorkflow.getWorkflowOutput(workflowId, String.class);
+        String output = aptWorkflow.getWorkflowOutput(workflowId, ExampleSimpleWorkflow.class);
         assertEquals("777", output);
 
         List<Event> events = aptWorkflow.getWorkflowEvents(workflowId);
@@ -97,7 +97,7 @@ public class AcceptanceTest {
         );
 
         // and the expected result is received
-        assertEquals("7770", aptWorkflow.getWorkflowOutput(workflowId, String.class));
+        assertEquals("7770", aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithSignal.class));
 
         // and the event sequence is correct
         List<Event> events = aptWorkflow.getWorkflowEvents(workflowId);
@@ -122,7 +122,7 @@ public class AcceptanceTest {
                 aptWorkflow.getWorkflowStatus(workflowId).isComplete());
 
         // and the output is correct
-        String output = aptWorkflow.getWorkflowOutput(workflowId, String.class);
+        String output = aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithSleep.class);
         assertEquals("777", output);
 
         // and the event sequence is correct
@@ -147,7 +147,7 @@ public class AcceptanceTest {
                 aptWorkflow.getWorkflowStatus(workflowId).isComplete());
 
         // and the output is correct
-        String output = aptWorkflow.getWorkflowOutput(workflowId, String.class);
+        String output = aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithCondition.class);
         assertEquals("3", output);
 
         // and the event sequence is correct
@@ -174,8 +174,8 @@ public class AcceptanceTest {
         aptWorkflow.signalWorkflow(workflowId, "OkToResume", true);
 
         Awaitility.await().atMost(1, TimeUnit.MINUTES)
-                .until(() -> "666asdf".equals(aptWorkflow.getWorkflowOutput(workflowId, String.class)));
-        System.out.println("done: " + aptWorkflow.getWorkflowOutput(workflowId, String.class));
+                .until(() -> "666asdf".equals(aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflow.class)));
+        System.out.println("done: " + aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflow.class));
     }
 
     @Nested
@@ -194,7 +194,7 @@ public class AcceptanceTest {
                     .until(() -> aptWorkflow.isWorkflowCompleted(workflowId));
 
             // then the output is correct
-            String output = aptWorkflow.getWorkflowOutput(workflowId, String.class);
+            String output = aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithActivity.class);
             assertEquals("777", output);
 
             // and the event sequence is correct
@@ -219,7 +219,7 @@ public class AcceptanceTest {
                     aptWorkflow.getWorkflowStatus(workflowId).isComplete());
 
             // and the output will be correct
-            String output = aptWorkflow.getWorkflowOutput(workflowId, String.class);
+            String output = aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithAsyncActivities.class);
             assertEquals("param: [777] oneSecondEcho: [1-seconds] twoSecondEcho: [2-seconds]", output);
 
             // and the activities run in parallel (2 activity starts followed by 2 completes)
@@ -244,10 +244,10 @@ public class AcceptanceTest {
 
             // then the workflow eventually completes
             Awaitility.await().atMost(1, TimeUnit.MINUTES)
-                    .until(() -> aptWorkflow.getWorkflowOutput(workflowId, Integer.class) != null);
+                    .until(() -> aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithNestedActivities.class) != null);
 
             // and the output is correct
-            int output = aptWorkflow.getWorkflowOutput(workflowId, Integer.class);
+            int output = aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithNestedActivities.class);
             assertEquals(900, output);
 
             // and the event sequence is correct

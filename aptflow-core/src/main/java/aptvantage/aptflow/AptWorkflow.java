@@ -41,8 +41,8 @@ public class AptWorkflow {
         this.workflowExecutor.runWorkflow(workflowClass, workflowParam, workflowId);
     }
 
-    public <R> R getWorkflowOutput(String workflowId, @SuppressWarnings("unused") Class<R> outputClass) {
-        return (R) repository.getWorkflow(workflowId).output();
+    public <OUTPUT extends Serializable> OUTPUT getWorkflowOutput(String workflowId, Class<? extends RunnableWorkflow<OUTPUT, ? extends Serializable>> workflowClass) {
+        return (OUTPUT) repository.getWorkflow(workflowId).output();
     }
 
     public boolean isWorkflowCompleted(String workflowId) {

@@ -6,11 +6,11 @@ import java.io.Serializable;
 import java.time.Instant;
 
 // TODO - let's see if we can genericise these inputs and outputs a little better
-public record Workflow(
+public record Workflow<INPUT extends Serializable, OUTPUT extends Serializable>(
         String id,
         @ColumnName("class_name") String className,
-        Serializable input,
-        Serializable output,
+        INPUT input,
+        OUTPUT output,
         Instant created,
         Event scheduled,
         Event started,
