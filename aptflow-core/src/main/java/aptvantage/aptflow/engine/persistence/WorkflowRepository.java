@@ -1,5 +1,6 @@
 package aptvantage.aptflow.engine.persistence;
 
+import aptvantage.aptflow.api.RunnableWorkflow;
 import aptvantage.aptflow.model.*;
 import org.jdbi.v3.core.Handle;
 import org.jdbi.v3.core.Jdbi;
@@ -289,7 +290,12 @@ public class WorkflowRepository {
         );
     }
 
-    public Workflow getWorkflow(String workflowId) {
+    public <O extends Serializable> Workflow<? extends Serializable, O>
+    getWorkflow(String workflowId, Class<? extends RunnableWorkflow<O, ? extends Serializable>> workflowClass) {
+        return getWorkflow(workflowId);
+    }
+
+    public <I extends Serializable, O extends Serializable> Workflow<I, O> getWorkflow(String workflowId) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
                                 SELECT
@@ -318,11 +324,11 @@ public class WorkflowRepository {
                                 """)
                         .bind("id", workflowId)
                         .map((rs, ctx) ->
-                                new Workflow(
+                                new Workflow<>(
                                         rs.getString("w_id"),
                                         rs.getString("w_class_name"),
-                                        serializableColumnMapper.map(rs, "w_input", ctx),
-                                        serializableColumnMapper.map(rs, "w_output", ctx),
+                                        (I) serializableColumnMapper.map(rs, "w_input", ctx),
+                                        (O) serializableColumnMapper.map(rs, "w_output", ctx),
                                         instantColumnMapper.map(rs, "w_created", ctx),
                                         new Event(
                                                 eventCategoryColumnMapper.map(rs, "scheduled_category", ctx),
@@ -370,21 +376,6 @@ public class WorkflowRepository {
                     .execute();
         });
 
-    }
-
-    public boolean hasWorkflowStarted(String workflowId) {
-        return jdbi.withHandle(handle ->
-                handle.createQuery("""
-                                SELECT count(id)
-                                FROM event
-                                WHERE workflow_id = :workflow_id
-                                    AND category = :category
-                                    AND status = :status
-                                """)
-                        .bind("workflow_id", workflowId)
-                        .bind("category", EventCategory.WORKFLOW)
-                        .bind("status", EventStatus.STARTED)
-                        .mapTo(Integer.class).one()) == 1;
     }
 
     public void workflowStarted(String workflowId) {

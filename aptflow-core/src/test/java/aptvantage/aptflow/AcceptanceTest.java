@@ -4,7 +4,6 @@ import aptvantage.aptflow.examples.*;
 import aptvantage.aptflow.model.Event;
 import aptvantage.aptflow.model.EventCategory;
 import aptvantage.aptflow.model.EventStatus;
-import aptvantage.aptflow.model.Function;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.parallel.Execution;
@@ -62,7 +61,7 @@ public class AcceptanceTest {
 
         // then it eventually completes
         Awaitility.await().atMost(1, TimeUnit.MINUTES)
-                .until(() -> aptWorkflow.isWorkflowCompleted(workflowId));
+                .until(() -> aptWorkflow.getWorkflowStatus(workflowId).isComplete());
 
         // and the expected output is correct
         String output = aptWorkflow.getWorkflowOutput(workflowId, ExampleSimpleWorkflow.class);
@@ -191,7 +190,7 @@ public class AcceptanceTest {
 
             // when the workflow completes
             Awaitility.await().atMost(1, TimeUnit.MINUTES)
-                    .until(() -> aptWorkflow.isWorkflowCompleted(workflowId));
+                    .until(() -> aptWorkflow.getWorkflowStatus(workflowId).isComplete());
 
             // then the output is correct
             String output = aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithActivity.class);
