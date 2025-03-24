@@ -1,6 +1,7 @@
 package aptvantage.aptflow.api;
 
-public interface RunnableWorkflow<R, P> {
-    // TODO - R & P should be Serializable
-    R execute(P param);
+import java.io.Serializable;
+
+public interface RunnableWorkflow<OUTPUT extends Serializable, INPUT extends Serializable> {
+    OUTPUT execute(INPUT param);
 }

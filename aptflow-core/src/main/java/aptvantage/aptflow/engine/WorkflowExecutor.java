@@ -91,7 +91,7 @@ public class WorkflowExecutor {
         try {
             RunnableWorkflow instance = instantiate(workflow.className());
             executionContext.set(new ExecutionContext(workflowId));
-            Object output = instance.execute(workflow.input());
+            Serializable output = instance.execute(workflow.input());
             executionContext.remove();
             this.workflowRepository.workflowCompleted(workflowId, output);
             logger.atInfo().log("Workflow [%s] is complete", workflowId);
