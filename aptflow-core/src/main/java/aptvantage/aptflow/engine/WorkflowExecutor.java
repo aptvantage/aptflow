@@ -89,10 +89,9 @@ public class WorkflowExecutor {
     void executeWorkflow(String workflowId) {
         Workflow<Serializable, Serializable> workflow = this.workflowRepository.getWorkflow(workflowId);
         try {
-            RunnableWorkflow instance = instantiate(workflow.className());
             executionContext.set(new ExecutionContext(workflowId));
+            RunnableWorkflow instance = instantiate(workflow.className());
             Serializable output = instance.execute(workflow.input());
-            executionContext.remove();
             this.workflowRepository.workflowCompleted(workflowId, output);
             logger.atInfo().log("Workflow [%s] is complete", workflowId);
         } catch (AwaitingSignalException e) {
@@ -104,9 +103,11 @@ public class WorkflowExecutor {
         } catch (ConditionNotSatisfiedException e) {
             logger.atInfo().log("Pausing execution of workflow [%s] because condition [%s] is not satisfied", workflowId, e.getIdentifier());
         } catch (Exception e) {
-            //TODO -- handle unexpected/unhandled failure encountered while evaluating workflow
-            // this should not re-throw an exception, it should handle them all
-            throw new RuntimeException(e);
+            // TODO -- save some kind of Failure data with the failed workflow
+            logger.atSevere().withCause(e).log("Workflow [%s] execution failed", workflowId);
+            this.workflowRepository.failWorkflow(workflowId);
+        } finally {
+            executionContext.remove();
         }
     }
 

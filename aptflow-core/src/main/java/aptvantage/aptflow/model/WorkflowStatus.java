@@ -24,4 +24,7 @@ public record WorkflowStatus(EventStatus status, List<Function> functions) {
         return status.isTerminal();
     }
 
+    public boolean hasFailed() {
+        return status == EventStatus.FAILED;
+    }
 }

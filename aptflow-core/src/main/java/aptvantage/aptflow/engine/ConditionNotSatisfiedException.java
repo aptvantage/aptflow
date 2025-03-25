@@ -1,6 +1,6 @@
 package aptvantage.aptflow.engine;
 
-public class ConditionNotSatisfiedException extends RuntimeException {
+public class ConditionNotSatisfiedException extends WorkflowPausedException {
     private final String identifier;
 
     public ConditionNotSatisfiedException(String identifier) {

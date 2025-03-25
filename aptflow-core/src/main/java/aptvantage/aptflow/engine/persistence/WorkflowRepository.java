@@ -59,6 +59,23 @@ public class WorkflowRepository {
         });
     }
 
+    public void failActivity(Activity activity) {
+        jdbi.useTransaction(handle -> {
+            String eventId = newEvent(handle, activity.workflowId(), EventCategory.ACTIVITY, EventStatus.FAILED);
+
+            handle.createUpdate("""
+                            UPDATE activity
+                            SET completed_event_id = :eventId
+                            WHERE workflow_id = :workflowId and name = :name
+                            """)
+                    .bind("workflowId", activity.workflowId())
+                    .bind("name", activity.name())
+                    .bind("eventId", eventId)
+                    .execute();
+
+        });
+    }
+
     public void completeActivity(String workflowId, String name, Serializable output) {
         jdbi.useTransaction(handle -> {
             String eventId = newEvent(handle, workflowId, EventCategory.ACTIVITY, EventStatus.COMPLETED);
@@ -414,6 +431,21 @@ public class WorkflowRepository {
                             WHERE id = :workflowId""")
                     .bind("eventId", eventId)
                     .bind("output", serialize(output))
+                    .bind("workflowId", workflowId)
+                    .execute();
+
+        });
+    }
+
+    public void failWorkflow(String workflowId) {
+        jdbi.useTransaction(handle -> {
+            String eventId = newEvent(handle, workflowId, EventCategory.WORKFLOW, EventStatus.FAILED);
+
+            handle.createUpdate("""
+                            UPDATE workflow
+                            SET completed_event_id = :eventId
+                            WHERE id = :workflowId""")
+                    .bind("eventId", eventId)
                     .bind("workflowId", workflowId)
                     .execute();
 

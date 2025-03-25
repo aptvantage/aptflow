@@ -143,9 +143,15 @@ public class WorkflowFunctions {
             return activityOutput(activity);
         }
 
-        R output = supplier.get();
-        completeActivity(activity, output);
-        return output;
+        try {
+            R output = supplier.get();
+            completeActivity(activity, output);
+            return output;
+        } catch (Exception e) {
+            rethrowIfWorkflowPausedException(e);
+            failActivity(activity, e);
+            throw new ActivityFailedException(activity, e);
+        }
     }
 
     void _activity(String activityName, Runnable runnable) {
@@ -154,8 +160,20 @@ public class WorkflowFunctions {
         if (activityHasAlreadyExecuted(activity)) {
             return;
         }
-        runnable.run();
-        completeActivity(activity, null);
+        try {
+            runnable.run();
+            completeActivity(activity, null);
+        } catch (Exception e) {
+            rethrowIfWorkflowPausedException(e);
+            failActivity(activity, e);
+            throw new ActivityFailedException(activity, e);
+        }
+    }
+
+    private void rethrowIfWorkflowPausedException(Exception e) {
+        if (e instanceof WorkflowPausedException) {
+            throw (WorkflowPausedException) e;
+        }
     }
 
     private <R extends Serializable> R activityOutput(Activity activity) {
@@ -184,6 +202,11 @@ public class WorkflowFunctions {
     private <R extends Serializable> void completeActivity(Activity activity, R output) {
         AptWorkflow.repository.completeActivity(activity.workflowId(), activity.name(), output);
         logger.atInfo().log("completing activity [%s]", activity.key());
+    }
+
+    private void failActivity(Activity activity, Exception e) {
+        AptWorkflow.repository.failActivity(activity);
+        logger.atSevere().withCause(e).log("activity [%s] failed", activity.key());
     }
 
 }

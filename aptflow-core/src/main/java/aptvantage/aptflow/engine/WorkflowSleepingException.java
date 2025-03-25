@@ -2,7 +2,7 @@ package aptvantage.aptflow.engine;
 
 import java.time.Duration;
 
-public class WorkflowSleepingException extends RuntimeException {
+public class WorkflowSleepingException extends WorkflowPausedException {
     private final String identifier;
     private final Duration napTime;
 
