@@ -1,3 +1,5 @@
+import com.vanniktech.maven.publish.SonatypeHost
+
 plugins {
     id("java-library")
     id("com.vanniktech.maven.publish") version "0.31.0"
@@ -35,6 +37,7 @@ dependencies {
     implementation("org.flywaydb:flyway-core:$flywayVersion")
     // https://mvnrepository.com/artifact/org.flywaydb/flyway-database-postgresql
     runtimeOnly("org.flywaydb:flyway-database-postgresql:$flywayVersion")
+    // https://mvnrepository.com/artifact/org.awaitility/awaitility
     implementation("org.awaitility:awaitility:4.3.0")
     // https://mvnrepository.com/artifact/org.jdbi/jdbi3-core
     implementation("org.jdbi:jdbi3-core:$jdbiVersion")
@@ -46,8 +49,6 @@ dependencies {
     testImplementation("org.testcontainers:junit-jupiter:$testcontainersVersion")
     // https://mvnrepository.com/artifact/org.testcontainers/postgresql
     testImplementation("org.testcontainers:postgresql:$testcontainersVersion")
-    // https://mvnrepository.com/artifact/org.awaitility/awaitility
-
 
 }
 
@@ -58,4 +59,44 @@ tasks.withType<Test> {
 
 tasks.jar {
     exclude("logback.xml")
+}
+
+/* For snapshot releases
+ * ./gradlew publishAllPublicationsToMavenCentralRepository -Pversion=SOME-SNAPSHOT
+ *
+ * For prod releases
+ *  ./gradlew publishToMavenCentral -Pversion=semanticVersion --no-configuration-cache
+ * Then go here to manually verify publication:
+ * https://central.sonatype.com/publishing/deployments
+ */
+mavenPublishing {
+    publishToMavenCentral(SonatypeHost.CENTRAL_PORTAL)
+    signAllPublications()
+    coordinates(project.group.toString(), "aptflow-core", project.version.toString())
+    pom {
+        name.set("aptflow-core")
+        description.set("Lightweight JVM workflow library")
+        inceptionYear.set("2025")
+        url.set("https://github.com/aptvantage/aptflow-core")
+        licenses {
+            license {
+                name.set("The Apache License, Version 2.0")
+                url.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+                distribution.set("http://www.apache.org/licenses/LICENSE-2.0.txt")
+            }
+        }
+        developers {
+            developer {
+                id.set("mnebus")
+                name.set("Michael Nebus")
+                url.set("https://github.com/mnebus/")
+            }
+        }
+        scm {
+            url.set("https://github.com/aptvantage/aptflow/")
+            connection.set("scm:git:git://github.com/aptvantage/aptflow.git")
+            developerConnection.set("scm:git:ssh://git@github.com/aptvantage/aptflow.git")
+        }
+    }
+
 }

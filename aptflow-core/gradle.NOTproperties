@@ -1,7 +1,7 @@
 SONATYPE_HOST=CENTRAL_PORTAL
 RELEASE_SIGNING_ENABLED=true
 GROUP=io.github.mnebus
-POM_ARTIFACT_ID=maestro-core
+POM_ARTIFACT_ID=aptflow-core
 VERSION_NAME=0.0.2
 POM_NAME=Maestro Core
 POM_DESCRIPTION=A simple and powerful workflow orchestrator

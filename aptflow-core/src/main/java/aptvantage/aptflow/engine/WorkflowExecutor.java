@@ -87,7 +87,7 @@ public class WorkflowExecutor {
     }
 
     void executeWorkflow(String workflowId) {
-        Workflow workflow = this.workflowRepository.getWorkflow(workflowId);
+        Workflow<Serializable, Serializable> workflow = this.workflowRepository.getWorkflow(workflowId);
         try {
             RunnableWorkflow instance = instantiate(workflow.className());
             executionContext.set(new ExecutionContext(workflowId));
@@ -145,6 +145,7 @@ public class WorkflowExecutor {
 
     public <T extends Serializable> void signalWorkflow(String workflowId, String signalName, T signalValue) {
         logger.atInfo().log("received signal [%s::%s]", workflowId, signalName);
+        //TODO -- validate the signalValue is of the expected type
         TaskInstance<SignalWorkflowTaskInput> instance = signalWorkflowTask.instance(
                 "signal::%s::%s".formatted(workflowId, signalName),
                 new SignalWorkflowTaskInput(workflowId, signalName, signalValue));
