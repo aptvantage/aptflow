@@ -9,12 +9,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static aptvantage.aptflow.api.WorkflowFunctions.*;
 
-public class ExampleWorkflow implements RunnableWorkflow<String, Integer> {
+public class ExampleWorkflowWithAllFunctions implements RunnableWorkflow<String, Integer> {
 
     private static final AtomicInteger conditionCheckCount = new AtomicInteger(0);
     private final ExampleService service;
 
-    public ExampleWorkflow(ExampleService service) {
+    public ExampleWorkflowWithAllFunctions(ExampleService service) {
 
         this.service = service;
     }
@@ -42,8 +42,8 @@ public class ExampleWorkflow implements RunnableWorkflow<String, Integer> {
 
         sleep("take a nap", Duration.ofSeconds(1));
 
-        CompletableFuture<Void> sleepFor10 = async(()
-                -> activity("Work for 10 seconds", () -> sleepForMillis(10_000)));
+        CompletableFuture<Void> sleepFor5 = async(()
+                -> activity("Work for 5 seconds", () -> sleepForMillis(5_000)));
 
         CompletableFuture<Void> sleepFor1 = async(()
                 -> activity("Work for 1 second", () -> sleepForMillis(1_000)));
@@ -51,7 +51,7 @@ public class ExampleWorkflow implements RunnableWorkflow<String, Integer> {
         awaitCondition("run a few times", () -> conditionCheckCount.getAndIncrement() > 2, Duration.ofSeconds(3));
 
         try {
-            sleepFor10.get();
+            sleepFor5.get();
             sleepFor1.get();
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);

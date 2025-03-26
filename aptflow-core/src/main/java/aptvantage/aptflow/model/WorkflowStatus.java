@@ -27,4 +27,8 @@ public record WorkflowStatus(EventStatus status, List<Function> functions) {
     public boolean hasFailed() {
         return status == EventStatus.FAILED;
     }
+
+    public boolean hasStarted() {
+       return status != EventStatus.SCHEDULED;
+    }
 }

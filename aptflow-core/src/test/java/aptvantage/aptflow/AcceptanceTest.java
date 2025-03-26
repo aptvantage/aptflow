@@ -162,19 +162,37 @@ public class AcceptanceTest {
 
     @Test
     @Execution(ExecutionMode.CONCURRENT)
-    public void test() throws Exception {
+    public void testExampleWorkflowWithAllFunctions() throws Exception {
+        // When a workflow with all functions is run
+        String workflowId = "testExampleWorkflowWithAllFunctions";
+        aptWorkflow.runWorkflow(ExampleWorkflowWithAllFunctions.class, 666, workflowId);
 
-        String workflowId = "test-workflow";
-        aptWorkflow.runWorkflow(ExampleWorkflow.class, 666, workflowId);
-
+        // then the workflow will start
         Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() ->
-                aptWorkflow.getWorkflowStatus(workflowId).status() != EventStatus.SCHEDULED);
+                aptWorkflow.getWorkflowStatus(workflowId).hasStarted());
 
+        // and the workflow will eventually wait for a signal
+        Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() ->
+                aptWorkflow.getWorkflowStatus(workflowId).isWaitingForSignal());
+
+        // when we signal the workflow
         aptWorkflow.signalWorkflow(workflowId, "OkToResume", true);
 
-        Awaitility.await().atMost(1, TimeUnit.MINUTES)
-                .until(() -> "666asdf".equals(aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflow.class)));
-        System.out.println("done: " + aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflow.class));
+        // then the workflow will eventually complete
+        Awaitility.await().atMost(1, TimeUnit.MINUTES).until(() ->
+                aptWorkflow.getWorkflowStatus(workflowId).isComplete()
+        );
+
+        // and the output is correct (which also implies successful completion)
+        assertEquals("666asdf", aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithAllFunctions.class));
+
+        // and the event stack contains every function
+        List<Event> events = aptWorkflow.getWorkflowEvents(workflowId);
+        assertTrue(events.stream().anyMatch(event -> event.category() == EventCategory.ACTIVITY));
+        assertTrue(events.stream().anyMatch(event -> event.category() == EventCategory.SIGNAL));
+        assertTrue(events.stream().anyMatch(event -> event.category() == EventCategory.SLEEP));
+        assertTrue(events.stream().anyMatch(event -> event.category() == EventCategory.WORKFLOW));
+        assertTrue(events.stream().anyMatch(event -> event.category() == EventCategory.CONDITION));
     }
 
     @Nested
