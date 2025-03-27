@@ -19,6 +19,11 @@ CREATE INDEX execution_time_idx ON scheduled_tasks (execution_time);
 CREATE INDEX last_heartbeat_idx ON scheduled_tasks (last_heartbeat);
 
 
+CREATE TABLE workflow
+(
+    id VARCHAR PRIMARY KEY
+);
+
 -- tables for nimble workflow
 CREATE TABLE workflow_run
 (
@@ -30,7 +35,8 @@ CREATE TABLE workflow_run
     class_name         VARCHAR,
     input              bytea,
     output             bytea,
-    created            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    archived           TIMESTAMP          DEFAULT NULL
 );
 
 CREATE TABLE activity

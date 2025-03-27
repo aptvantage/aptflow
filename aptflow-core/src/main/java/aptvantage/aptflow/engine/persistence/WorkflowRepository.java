@@ -228,11 +228,26 @@ public class WorkflowRepository {
                         .orElse(null));
     }
 
-    public WorkflowStatus getWorkflowStatus(String workflowRunId) {
+    public String getActiveWorkflowRunId(String workflowId) {
+        return jdbi.withHandle(handle ->
+                handle.createQuery("""
+                                SELECT id
+                                FROM workflow_run
+                                WHERE workflow_id = :workflowId
+                                    AND archived IS NULL
+                                """)
+                        .bind("workflowId", workflowId)
+                        .map((rs, ctx) ->
+                                rs.getString("id")
+                        ).one()
+        );
+    }
+
+    public WorkflowRunStatus getWorkflowRunStatus(String workflowRunId) {
         EventStatus workflowStatus = getLatestEventStatus(workflowRunId, EventCategory.WORKFLOW);
         List<Function> functions = getFunctions(workflowRunId);
         //TODO -- provide failed functions
-        return new WorkflowStatus(workflowStatus, functions);
+        return new WorkflowRunStatus(workflowStatus, functions);
 
     }
 
@@ -370,13 +385,21 @@ public class WorkflowRepository {
                         .orElse(null));
     }
 
-    public void newWorkflowScheduled(String workflowRunId, Class workflowClass, Object input) {
+    public String scheduleRunForNewWorkflow(String workflowId, Class workflowClass, Object input) {
+        String workflowRunId = UUID.randomUUID().toString();
         jdbi.useTransaction(handle -> {
+            handle.createUpdate("""
+                            INSERT INTO workflow(id)
+                            VALUES (:workflowId)
+                            """)
+                    .bind("workflowId", workflowId)
+                    .execute();
             Update update = handle.createUpdate("""
-                    INSERT INTO workflow_run (id, class_name, input, created)
-                    VALUES (:id, :class_name, :input, :created)
+                    INSERT INTO workflow_run (id, workflow_id, class_name, input, created)
+                    VALUES (:id, :workflowId, :class_name, :input, :created)
                     """);
             update.bind("id", workflowRunId);
+            update.bind("workflowId", workflowId);
             update.bind("class_name", workflowClass.getName());
             update.bind("created", Instant.now());
             update.bind("input", serialize(input));
@@ -392,10 +415,11 @@ public class WorkflowRepository {
                     .bind("workflowRunId", workflowRunId)
                     .execute();
         });
+        return workflowRunId;
 
     }
 
-    public void workflowStarted(String workflowRunId) {
+    public void workflowRunStarted(String workflowRunId) {
         jdbi.useTransaction(handle -> {
 
             String eventId = newEvent(handle, workflowRunId, EventCategory.WORKFLOW, EventStatus.STARTED);
@@ -420,7 +444,7 @@ public class WorkflowRepository {
         return byteStream.toByteArray();
     }
 
-    public void workflowCompleted(String workflowRunId, Object output) {
+    public void workflowRunCompleted(String workflowRunId, Object output) {
         jdbi.useTransaction(handle -> {
             String eventId = newEvent(handle, workflowRunId, EventCategory.WORKFLOW, EventStatus.COMPLETED);
 
@@ -437,7 +461,7 @@ public class WorkflowRepository {
         });
     }
 
-    public void failWorkflow(String workflowRunId) {
+    public void failWorkflowRun(String workflowRunId) {
         jdbi.useTransaction(handle -> {
             String eventId = newEvent(handle, workflowRunId, EventCategory.WORKFLOW, EventStatus.FAILED);
 

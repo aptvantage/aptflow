@@ -23,7 +23,7 @@ public class StartWorkflowTask extends OneTimeTask<RunWorkflowTaskInput> {
     @Override
     public void executeOnce(TaskInstance<RunWorkflowTaskInput> taskInstance, ExecutionContext executionContext) {
         RunWorkflowTaskInput data = taskInstance.getData();
-        workflowRepository.workflowStarted(data.workflowId());
+        workflowRepository.workflowRunStarted(data.workflowId());
         workflowExecutor.executeWorkflow(data.workflowId());
     }
 }
