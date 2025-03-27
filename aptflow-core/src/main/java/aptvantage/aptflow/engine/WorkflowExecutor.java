@@ -2,7 +2,7 @@ package aptvantage.aptflow.engine;
 
 import aptvantage.aptflow.api.RunnableWorkflow;
 import aptvantage.aptflow.engine.persistence.WorkflowRepository;
-import aptvantage.aptflow.model.Workflow;
+import aptvantage.aptflow.model.WorkflowRun;
 import com.github.kagkarlsson.scheduler.Scheduler;
 import com.github.kagkarlsson.scheduler.task.TaskInstance;
 import com.google.common.flogger.FluentLogger;
@@ -87,11 +87,11 @@ public class WorkflowExecutor {
     }
 
     void executeWorkflow(String workflowId) {
-        Workflow<Serializable, Serializable> workflow = this.workflowRepository.getWorkflow(workflowId);
+        WorkflowRun<Serializable, Serializable> workflowRun = this.workflowRepository.getWorkflowRun(workflowId);
         try {
             executionContext.set(new ExecutionContext(workflowId));
-            RunnableWorkflow instance = instantiate(workflow.className());
-            Serializable output = instance.execute(workflow.input());
+            RunnableWorkflow instance = instantiate(workflowRun.className());
+            Serializable output = instance.execute(workflowRun.input());
             this.workflowRepository.workflowCompleted(workflowId, output);
             logger.atInfo().log("Workflow [%s] is complete", workflowId);
         } catch (AwaitingSignalException e) {

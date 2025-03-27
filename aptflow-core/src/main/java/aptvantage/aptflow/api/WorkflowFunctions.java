@@ -177,7 +177,7 @@ public class WorkflowFunctions {
     }
 
     private <R extends Serializable> R activityOutput(Activity activity) {
-        return (R) AptWorkflow.repository.getActivity(activity.workflowId(), activity.name()).output();
+        return (R) AptWorkflow.repository.getActivity(activity.workflowRunId(), activity.name()).output();
     }
 
     private Activity initActivity(String workflowId, String activityName) {
@@ -200,7 +200,7 @@ public class WorkflowFunctions {
     }
 
     private <R extends Serializable> void completeActivity(Activity activity, R output) {
-        AptWorkflow.repository.completeActivity(activity.workflowId(), activity.name(), output);
+        AptWorkflow.repository.completeActivity(activity.workflowRunId(), activity.name(), output);
         logger.atInfo().log("completing activity [%s]", activity.key());
     }
 

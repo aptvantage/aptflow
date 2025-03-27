@@ -42,7 +42,7 @@ public class AptWorkflow {
     }
 
     public <OUTPUT extends Serializable> OUTPUT getWorkflowOutput(String workflowId, Class<? extends RunnableWorkflow<OUTPUT, ? extends Serializable>> workflowClass) {
-        return repository.getWorkflow(workflowId, workflowClass).output();
+        return repository.getWorkflowRun(workflowId, workflowClass).output();
     }
 
     public WorkflowStatus getWorkflowStatus(String workflowId) {
