@@ -6,7 +6,6 @@ import org.jdbi.v3.core.Handle;
 import org.jdbi.v3.core.Jdbi;
 import org.jdbi.v3.core.mapper.ColumnMapper;
 import org.jdbi.v3.core.statement.StatementContext;
-import org.jdbi.v3.core.statement.Update;
 
 import java.io.*;
 import java.sql.ResultSet;
@@ -331,10 +330,12 @@ public class WorkflowRepository {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
                                 SELECT
+                                    r.id as r_id,
                                     w.id as w_id,
                                     w.class_name as w_class_name,
                                     w.input as w_input,
-                                    w.output as w_output,
+                                    r.output as r_output,
+                                    r.created as r_created,
                                     w.created as w_created,
                                     scheduled.timestamp as scheduled_timestamp,
                                     scheduled.category as scheduled_category,
@@ -345,39 +346,45 @@ public class WorkflowRepository {
                                     completed.timestamp as completed_timestamp,
                                     completed.category as completed_category,
                                     completed.status as completed_status
-                                FROM workflow_run w
+                                FROM workflow_run r
+                                    INNER JOIN workflow w
+                                        ON r.workflow_id = w.id
                                   LEFT JOIN event scheduled
-                                    ON w.scheduled_event_id = scheduled.id
+                                    ON r.scheduled_event_id = scheduled.id
                                   LEFT JOIN event started
-                                    ON w.started_event_id = started.id
+                                    ON r.started_event_id = started.id
                                   LEFT JOIN event completed
-                                    ON w.completed_event_id = completed.id
-                                WHERE w.id = :id
+                                    ON r.completed_event_id = completed.id
+                                WHERE r.id = :id
                                 """)
                         .bind("id", workflowRunId)
                         .map((rs, ctx) ->
                                 new WorkflowRun<>(
-                                        rs.getString("w_id"),
-                                        rs.getString("w_class_name"),
-                                        (I) serializableColumnMapper.map(rs, "w_input", ctx),
-                                        (O) serializableColumnMapper.map(rs, "w_output", ctx),
-                                        instantColumnMapper.map(rs, "w_created", ctx),
+                                        rs.getString("r_id"),
+                                        new Workflow<>(
+                                                rs.getString("w_id"),
+                                                rs.getString("w_class_name"),
+                                                (I) serializableColumnMapper.map(rs, "w_input", ctx),
+                                                instantColumnMapper.map(rs, "w_created", ctx)
+                                        ),
+                                        (O) serializableColumnMapper.map(rs, "r_output", ctx),
+                                        instantColumnMapper.map(rs, "r_created", ctx),
                                         new Event(
                                                 eventCategoryColumnMapper.map(rs, "scheduled_category", ctx),
                                                 eventStatusColumnMapper.map(rs, "scheduled_status", ctx),
-                                                rs.getString("w_id"),
+                                                rs.getString("r_id"),
                                                 instantColumnMapper.map(rs, "scheduled_timestamp", ctx)
                                         ),
                                         new Event(
                                                 eventCategoryColumnMapper.map(rs, "started_category", ctx),
                                                 eventStatusColumnMapper.map(rs, "started_status", ctx),
-                                                rs.getString("w_id"),
+                                                rs.getString("r_id"),
                                                 instantColumnMapper.map(rs, "started_timestamp", ctx)
                                         ),
                                         new Event(
                                                 eventCategoryColumnMapper.map(rs, "completed_category", ctx),
                                                 eventStatusColumnMapper.map(rs, "completed_status", ctx),
-                                                rs.getString("w_id"),
+                                                rs.getString("r_id"),
                                                 instantColumnMapper.map(rs, "completed_timestamp", ctx)
                                         )
                                 ))
@@ -388,22 +395,23 @@ public class WorkflowRepository {
     public String scheduleRunForNewWorkflow(String workflowId, Class workflowClass, Object input) {
         String workflowRunId = UUID.randomUUID().toString();
         jdbi.useTransaction(handle -> {
+
             handle.createUpdate("""
-                            INSERT INTO workflow(id)
-                            VALUES (:workflowId)
+                            INSERT INTO workflow(id, class_name, input)
+                            VALUES (:id, :className, :input)
                             """)
+                    .bind("id", workflowId)
+                    .bind("className", workflowClass.getName())
+                    .bind("input", serialize(input))
+                    .execute();
+
+            handle.createUpdate("""
+                            INSERT INTO workflow_run (id, workflow_id)
+                            VALUES (:id, :workflowId)
+                            """)
+                    .bind("id", workflowRunId)
                     .bind("workflowId", workflowId)
                     .execute();
-            Update update = handle.createUpdate("""
-                    INSERT INTO workflow_run (id, workflow_id, class_name, input, created)
-                    VALUES (:id, :workflowId, :class_name, :input, :created)
-                    """);
-            update.bind("id", workflowRunId);
-            update.bind("workflowId", workflowId);
-            update.bind("class_name", workflowClass.getName());
-            update.bind("created", Instant.now());
-            update.bind("input", serialize(input));
-            update.execute();
 
             String eventId = newEvent(handle, workflowRunId, EventCategory.WORKFLOW, EventStatus.SCHEDULED);
 

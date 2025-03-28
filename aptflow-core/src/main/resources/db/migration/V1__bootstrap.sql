@@ -18,13 +18,16 @@ create table scheduled_tasks
 CREATE INDEX execution_time_idx ON scheduled_tasks (execution_time);
 CREATE INDEX last_heartbeat_idx ON scheduled_tasks (last_heartbeat);
 
+-- tables for AptWorkflow
 
 CREATE TABLE workflow
 (
-    id VARCHAR PRIMARY KEY
+    id         VARCHAR PRIMARY KEY,
+    class_name VARCHAR   NOT NULL,
+    input      bytea,
+    created    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
--- tables for nimble workflow
 CREATE TABLE workflow_run
 (
     id                 VARCHAR PRIMARY KEY,
@@ -32,8 +35,6 @@ CREATE TABLE workflow_run
     scheduled_event_id VARCHAR,
     started_event_id   VARCHAR,
     completed_event_id VARCHAR,
-    class_name         VARCHAR,
-    input              bytea,
     output             bytea,
     created            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     archived           TIMESTAMP          DEFAULT NULL

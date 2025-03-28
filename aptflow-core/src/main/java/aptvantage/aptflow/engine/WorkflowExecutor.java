@@ -90,8 +90,8 @@ public class WorkflowExecutor {
         WorkflowRun<Serializable, Serializable> workflowRun = this.workflowRepository.getWorkflowRun(workflowId);
         try {
             executionContext.set(new ExecutionContext(workflowId));
-            RunnableWorkflow instance = instantiate(workflowRun.className());
-            Serializable output = instance.execute(workflowRun.input());
+            RunnableWorkflow instance = instantiate(workflowRun.workflow().className());
+            Serializable output = instance.execute(workflowRun.workflow().input());
             this.workflowRepository.workflowRunCompleted(workflowId, output);
             logger.atInfo().log("Workflow [%s] is complete", workflowId);
         } catch (AwaitingSignalException e) {
