@@ -155,7 +155,7 @@ public class WorkflowExecutor {
         Awaitility.await().atMost(20, TimeUnit.SECONDS).until(() -> this.workflowRepository.isSignalReceived(workflowId, signalName));
     }
 
-    public <P extends Serializable> void runWorkflow(Class<? extends RunnableWorkflow<?, P>> workflowClass, P workflowParam, String workflowId) {
+    public <I extends Serializable> void runWorkflow(Class<? extends RunnableWorkflow<I, ?>> workflowClass, I workflowParam, String workflowId) {
         logger.atInfo().log("scheduling run for new workflow [%s] of type [%s]", workflowId, workflowClass.getName());
         String workflowRunId = this.workflowRepository.scheduleRunForNewWorkflow(workflowId, workflowClass, workflowParam);
         TaskInstance<RunWorkflowTaskInput> instance = startWorkflowTask.instance(

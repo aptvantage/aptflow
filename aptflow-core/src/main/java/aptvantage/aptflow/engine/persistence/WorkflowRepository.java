@@ -322,7 +322,7 @@ public class WorkflowRepository {
     }
 
     public <O extends Serializable> WorkflowRun<? extends Serializable, O>
-    getWorkflowRun(String workflowRunId, Class<? extends RunnableWorkflow<O, ? extends Serializable>> workflowClass) {
+    getWorkflowRun(String workflowRunId, Class<? extends RunnableWorkflow<? extends Serializable, O>> workflowClass) {
         return getWorkflowRun(workflowRunId);
     }
 

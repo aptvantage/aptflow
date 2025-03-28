@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static aptvantage.aptflow.api.WorkflowFunctions.awaitCondition;
 
-public class ExampleWorkflowWithCondition implements RunnableWorkflow<String, Integer> {
+public class ExampleWorkflowWithCondition implements RunnableWorkflow<Integer, String> {
 
     private static final AtomicInteger counter = new AtomicInteger(0);
 

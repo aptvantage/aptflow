@@ -38,11 +38,11 @@ public class AptWorkflow {
         this.workflowExecutor.signalWorkflowRun(workflowRunId, signalName, signalValue);
     }
 
-    public <P extends Serializable> void runWorkflow(Class<? extends RunnableWorkflow<?, P>> workflowClass, P workflowParam, String workflowId) {
+    public <I extends Serializable> void runWorkflow(Class<? extends RunnableWorkflow<I, ?>> workflowClass, I workflowParam, String workflowId) {
         this.workflowExecutor.runWorkflow(workflowClass, workflowParam, workflowId);
     }
 
-    public <OUTPUT extends Serializable> OUTPUT getWorkflowOutput(String workflowId, Class<? extends RunnableWorkflow<OUTPUT, ? extends Serializable>> workflowClass) {
+    public <O extends Serializable> O getWorkflowOutput(String workflowId, Class<? extends RunnableWorkflow<? extends Serializable, O>> workflowClass) {
         String workflowRunId = repository.getActiveWorkflowRunId(workflowId);
         return repository.getWorkflowRun(workflowRunId, workflowClass).output();
     }

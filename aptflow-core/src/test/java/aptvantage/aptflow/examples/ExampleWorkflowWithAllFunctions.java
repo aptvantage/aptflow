@@ -9,7 +9,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static aptvantage.aptflow.api.WorkflowFunctions.*;
 
-public class ExampleWorkflowWithAllFunctions implements RunnableWorkflow<String, Integer> {
+public class ExampleWorkflowWithAllFunctions implements RunnableWorkflow<Integer, String> {
 
     private static final AtomicInteger conditionCheckCount = new AtomicInteger(0);
     private final ExampleService service;

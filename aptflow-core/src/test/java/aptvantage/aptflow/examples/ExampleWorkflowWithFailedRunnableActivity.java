@@ -4,7 +4,7 @@ import aptvantage.aptflow.api.RunnableWorkflow;
 
 import static aptvantage.aptflow.api.WorkflowFunctions.activity;
 
-public class ExampleWorkflowWithFailedRunnableActivity implements RunnableWorkflow<String, Integer> {
+public class ExampleWorkflowWithFailedRunnableActivity implements RunnableWorkflow<Integer, String> {
     @Override
     public String execute(Integer param) {
 
