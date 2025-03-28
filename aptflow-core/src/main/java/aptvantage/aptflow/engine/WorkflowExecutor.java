@@ -2,7 +2,7 @@ package aptvantage.aptflow.engine;
 
 import aptvantage.aptflow.api.RunnableWorkflow;
 import aptvantage.aptflow.engine.persistence.WorkflowRepository;
-import aptvantage.aptflow.model.Workflow;
+import aptvantage.aptflow.model.WorkflowRun;
 import com.github.kagkarlsson.scheduler.Scheduler;
 import com.github.kagkarlsson.scheduler.task.TaskInstance;
 import com.google.common.flogger.FluentLogger;
@@ -87,12 +87,12 @@ public class WorkflowExecutor {
     }
 
     void executeWorkflow(String workflowId) {
-        Workflow<Serializable, Serializable> workflow = this.workflowRepository.getWorkflow(workflowId);
+        WorkflowRun<Serializable, Serializable> workflowRun = this.workflowRepository.getWorkflowRun(workflowId);
         try {
             executionContext.set(new ExecutionContext(workflowId));
-            RunnableWorkflow instance = instantiate(workflow.className());
-            Serializable output = instance.execute(workflow.input());
-            this.workflowRepository.workflowCompleted(workflowId, output);
+            RunnableWorkflow instance = instantiate(workflowRun.workflow().className());
+            Serializable output = instance.execute(workflowRun.workflow().input());
+            this.workflowRepository.workflowRunCompleted(workflowId, output);
             logger.atInfo().log("Workflow [%s] is complete", workflowId);
         } catch (AwaitingSignalException e) {
             logger.atInfo().log("Pausing execution of workflow [%s] to wait for signal [%s]", workflowId, e.getSignal());
@@ -105,7 +105,7 @@ public class WorkflowExecutor {
         } catch (Exception e) {
             // TODO -- save some kind of Failure data with the failed workflow
             logger.atSevere().withCause(e).log("Workflow [%s] execution failed", workflowId);
-            this.workflowRepository.failWorkflow(workflowId);
+            this.workflowRepository.failWorkflowRun(workflowId);
         } finally {
             executionContext.remove();
         }
@@ -144,7 +144,7 @@ public class WorkflowExecutor {
         ), wakeupTime);
     }
 
-    public <T extends Serializable> void signalWorkflow(String workflowId, String signalName, T signalValue) {
+    public <T extends Serializable> void signalWorkflowRun(String workflowId, String signalName, T signalValue) {
         logger.atInfo().log("received signal [%s::%s]", workflowId, signalName);
         //TODO -- validate the signalValue is of the expected type
         TaskInstance<SignalWorkflowTaskInput> instance = signalWorkflowTask.instance(
@@ -156,11 +156,11 @@ public class WorkflowExecutor {
     }
 
     public <P extends Serializable> void runWorkflow(Class<? extends RunnableWorkflow<?, P>> workflowClass, P workflowParam, String workflowId) {
-        logger.atInfo().log("scheduling new workflow [%s] of type [%s]", workflowId, workflowClass.getName());
-        this.workflowRepository.newWorkflowScheduled(workflowId, workflowClass, workflowParam);
+        logger.atInfo().log("scheduling run for new workflow [%s] of type [%s]", workflowId, workflowClass.getName());
+        String workflowRunId = this.workflowRepository.scheduleRunForNewWorkflow(workflowId, workflowClass, workflowParam);
         TaskInstance<RunWorkflowTaskInput> instance = startWorkflowTask.instance(
-                "workflow::%s".formatted(workflowId),
-                new RunWorkflowTaskInput(workflowId));
+                "workflow::%s::%s".formatted(workflowId, workflowRunId),
+                new RunWorkflowTaskInput(workflowRunId));
         scheduler.schedule(instance,
                 Instant.now());
     }

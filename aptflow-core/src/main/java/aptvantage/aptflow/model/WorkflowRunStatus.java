@@ -2,8 +2,8 @@ package aptvantage.aptflow.model;
 
 import java.util.List;
 
-public record WorkflowStatus(EventStatus status, List<Function> functions) {
-    public WorkflowStatus {
+public record WorkflowRunStatus(EventStatus status, List<Function> functions) {
+    public WorkflowRunStatus {
         if (status == null) {
             throw new IllegalArgumentException("status cannot be null");
         }
@@ -26,5 +26,9 @@ public record WorkflowStatus(EventStatus status, List<Function> functions) {
 
     public boolean hasFailed() {
         return status == EventStatus.FAILED;
+    }
+
+    public boolean hasStarted() {
+        return status != EventStatus.SCHEDULED;
     }
 }

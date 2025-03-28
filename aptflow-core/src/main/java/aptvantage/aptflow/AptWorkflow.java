@@ -5,7 +5,7 @@ import aptvantage.aptflow.api.WorkflowFunctions;
 import aptvantage.aptflow.engine.WorkflowExecutor;
 import aptvantage.aptflow.engine.persistence.WorkflowRepository;
 import aptvantage.aptflow.model.Event;
-import aptvantage.aptflow.model.WorkflowStatus;
+import aptvantage.aptflow.model.WorkflowRunStatus;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import org.flywaydb.core.Flyway;
@@ -34,7 +34,8 @@ public class AptWorkflow {
     }
 
     public <T extends Serializable> void signalWorkflow(String workflowId, String signalName, T signalValue) {
-        this.workflowExecutor.signalWorkflow(workflowId, signalName, signalValue);
+        String workflowRunId = repository.getActiveWorkflowRunId(workflowId);
+        this.workflowExecutor.signalWorkflowRun(workflowRunId, signalName, signalValue);
     }
 
     public <P extends Serializable> void runWorkflow(Class<? extends RunnableWorkflow<?, P>> workflowClass, P workflowParam, String workflowId) {
@@ -42,15 +43,18 @@ public class AptWorkflow {
     }
 
     public <OUTPUT extends Serializable> OUTPUT getWorkflowOutput(String workflowId, Class<? extends RunnableWorkflow<OUTPUT, ? extends Serializable>> workflowClass) {
-        return repository.getWorkflow(workflowId, workflowClass).output();
+        String workflowRunId = repository.getActiveWorkflowRunId(workflowId);
+        return repository.getWorkflowRun(workflowRunId, workflowClass).output();
     }
 
-    public WorkflowStatus getWorkflowStatus(String workflowId) {
-        return repository.getWorkflowStatus(workflowId);
+    public WorkflowRunStatus getWorkflowStatus(String workflowId) {
+        String workflowRunId = repository.getActiveWorkflowRunId(workflowId);
+        return repository.getWorkflowRunStatus(workflowRunId);
     }
 
     public List<Event> getWorkflowEvents(String workflowId) {
-        return repository.getWorkflowEvents(workflowId);
+        String workflowRunId = repository.getActiveWorkflowRunId(workflowId);
+        return repository.getWorkflowEvents(workflowRunId);
     }
 
     public void stop() {

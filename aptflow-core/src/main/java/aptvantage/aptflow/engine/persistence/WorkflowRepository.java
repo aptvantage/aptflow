@@ -6,7 +6,6 @@ import org.jdbi.v3.core.Handle;
 import org.jdbi.v3.core.Jdbi;
 import org.jdbi.v3.core.mapper.ColumnMapper;
 import org.jdbi.v3.core.statement.StatementContext;
-import org.jdbi.v3.core.statement.Update;
 
 import java.io.*;
 import java.sql.ResultSet;
@@ -30,14 +29,14 @@ public class WorkflowRepository {
         this.jdbi = jdbi;
     }
 
-    private static String newEvent(Handle handle, String workflowId, EventCategory category, EventStatus status) {
+    private static String newEvent(Handle handle, String workflowRunId, EventCategory category, EventStatus status) {
         String eventId = UUID.randomUUID().toString();
         handle.createUpdate("""
-                        INSERT INTO event (id, workflow_id, category, status, timestamp)
-                        VALUES (:id, :workflow_id, :category, :status, :timestamp)
+                        INSERT INTO event (id, workflow_run_id, category, status, timestamp)
+                        VALUES (:id, :workflow_run_id, :category, :status, :timestamp)
                         """)
                 .bind("id", eventId)
-                .bind("workflow_id", workflowId)
+                .bind("workflow_run_id", workflowRunId)
                 .bind("category", category)
                 .bind("status", status)
                 .bind("timestamp", Instant.now())
@@ -45,14 +44,14 @@ public class WorkflowRepository {
         return eventId;
     }
 
-    public void newActivityStarted(String workflowId, String name) {
+    public void newActivityStarted(String workflowRunId, String name) {
         jdbi.useTransaction(handle -> {
-            String eventId = newEvent(handle, workflowId, EventCategory.ACTIVITY, EventStatus.STARTED);
+            String eventId = newEvent(handle, workflowRunId, EventCategory.ACTIVITY, EventStatus.STARTED);
             handle.createUpdate("""
-                            INSERT INTO activity(workflow_id, name, started_event_id)
-                            VALUES (:workflowId, :name, :eventId)
+                            INSERT INTO activity(workflow_run_id, name, started_event_id)
+                            VALUES (:workflowRunId, :name, :eventId)
                             """)
-                    .bind("workflowId", workflowId)
+                    .bind("workflowRunId", workflowRunId)
                     .bind("name", name)
                     .bind("eventId", eventId)
                     .execute();
@@ -61,14 +60,14 @@ public class WorkflowRepository {
 
     public void failActivity(Activity activity) {
         jdbi.useTransaction(handle -> {
-            String eventId = newEvent(handle, activity.workflowId(), EventCategory.ACTIVITY, EventStatus.FAILED);
+            String eventId = newEvent(handle, activity.workflowRunId(), EventCategory.ACTIVITY, EventStatus.FAILED);
 
             handle.createUpdate("""
                             UPDATE activity
                             SET completed_event_id = :eventId
-                            WHERE workflow_id = :workflowId and name = :name
+                            WHERE workflow_run_id = :workflowRunId and name = :name
                             """)
-                    .bind("workflowId", activity.workflowId())
+                    .bind("workflowRunId", activity.workflowRunId())
                     .bind("name", activity.name())
                     .bind("eventId", eventId)
                     .execute();
@@ -76,17 +75,17 @@ public class WorkflowRepository {
         });
     }
 
-    public void completeActivity(String workflowId, String name, Serializable output) {
+    public void completeActivity(String workflowRunId, String name, Serializable output) {
         jdbi.useTransaction(handle -> {
-            String eventId = newEvent(handle, workflowId, EventCategory.ACTIVITY, EventStatus.COMPLETED);
+            String eventId = newEvent(handle, workflowRunId, EventCategory.ACTIVITY, EventStatus.COMPLETED);
 
             handle.createUpdate("""
                             UPDATE activity
                             SET output = :output,
                                 completed_event_id = :eventId
-                            WHERE workflow_id = :workflowId and name = :name
+                            WHERE workflow_run_id = :workflowRunId and name = :name
                             """)
-                    .bind("workflowId", workflowId)
+                    .bind("workflowRunId", workflowRunId)
                     .bind("name", name)
                     .bind("eventId", eventId)
                     .bind("output", serialize(output))
@@ -95,11 +94,11 @@ public class WorkflowRepository {
 
     }
 
-    public Activity getActivity(String workflowId, String name) {
+    public Activity getActivity(String workflowRunId, String name) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
                                 SELECT
-                                 a.workflow_id as a_workflow_id,
+                                 a.workflow_run_id as a_workflow_run_id,
                                  a.name as a_name,
                                  a.output as a_output,
                                  started.category as started_category,
@@ -111,13 +110,13 @@ public class WorkflowRepository {
                                 FROM activity a
                                   LEFT JOIN event started on a.started_event_id = started.id
                                   LEFT JOIN event completed on a.completed_event_id = completed.id
-                                WHERE a.workflow_id = :workflowId and a.name = :name
+                                WHERE a.workflow_run_id = :workflowRunId and a.name = :name
                                 """)
-                        .bind("workflowId", workflowId)
+                        .bind("workflowRunId", workflowRunId)
                         .bind("name", name)
                         .map((rs, ctx) ->
                                 new Activity(
-                                        rs.getString("a_workflow_id"),
+                                        rs.getString("a_workflow_run_id"),
                                         rs.getString("a_name"),
                                         serializableColumnMapper.map(rs, "a_output", ctx),
                                         new Event(
@@ -137,34 +136,34 @@ public class WorkflowRepository {
                         .orElse(null));
     }
 
-    public void newSignalWaiting(String workflowId, String name) {
+    public void newSignalWaiting(String workflowRunId, String name) {
         jdbi.useTransaction(handle -> {
 
-            String eventId = newEvent(handle, workflowId, EventCategory.SIGNAL, EventStatus.WAITING);
+            String eventId = newEvent(handle, workflowRunId, EventCategory.SIGNAL, EventStatus.WAITING);
 
             handle.createUpdate("""
-                            INSERT INTO signal(workflow_id, name, waiting_event_id)
-                            VALUES (:workflowId, :name, :eventId)
+                            INSERT INTO signal(workflow_run_id, name, waiting_event_id)
+                            VALUES (:workflowRunId, :name, :eventId)
                             """)
-                    .bind("workflowId", workflowId)
+                    .bind("workflowRunId", workflowRunId)
                     .bind("name", name)
                     .bind("eventId", eventId)
                     .execute();
         });
     }
 
-    public void signalReceived(String workflowId, String name, Serializable value) {
+    public void signalReceived(String workflowRunId, String name, Serializable value) {
         jdbi.useTransaction(handle -> {
 
-            String eventId = newEvent(handle, workflowId, EventCategory.SIGNAL, EventStatus.RECEIVED);
+            String eventId = newEvent(handle, workflowRunId, EventCategory.SIGNAL, EventStatus.RECEIVED);
 
             handle.createUpdate("""
                             UPDATE signal
                             SET value = :value,
                                 received_event_id = :eventId
-                            WHERE workflow_id = :workflowId and name = :name
+                            WHERE workflow_run_id = :workflowRunId and name = :name
                             """)
-                    .bind("workflowId", workflowId)
+                    .bind("workflowRunId", workflowRunId)
                     .bind("name", name)
                     .bind("eventId", eventId)
                     .bind("value", serialize(value))
@@ -172,25 +171,25 @@ public class WorkflowRepository {
         });
     }
 
-    public boolean isSignalReceived(String workflowId, String name) {
+    public boolean isSignalReceived(String workflowRunId, String name) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
-                                SELECT count(workflow_id)
+                                SELECT count(workflow_run_id)
                                 FROM signal
-                                WHERE workflow_id = :workflowId
+                                WHERE workflow_run_id = :workflowRunId
                                     AND name = :name
                                     AND received_event_id IS NOT NULL
                                 """)
-                        .bind("workflowId", workflowId)
+                        .bind("workflowRunId", workflowRunId)
                         .bind("name", name)
                         .mapTo(Integer.class).one()) == 1;
     }
 
-    public Signal getSignal(String workflowId, String name) {
+    public Signal getSignal(String workflowRunId, String name) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
                                 SELECT
-                                 s.workflow_id as s_workflow_id,
+                                 s.workflow_run_id as s_workflow_run_id,
                                  s.name as s_name,
                                  s.value as s_value,
                                  waiting.category as waiting_category,
@@ -202,13 +201,13 @@ public class WorkflowRepository {
                                 FROM signal s
                                   LEFT JOIN event waiting on s.waiting_event_id = waiting.id
                                   LEFT JOIN event received on s.received_event_id = received.id
-                                WHERE s.workflow_id = :workflowId and s.name = :name
+                                WHERE s.workflow_run_id = :workflowRunId and s.name = :name
                                 """)
-                        .bind("workflowId", workflowId)
+                        .bind("workflowRunId", workflowRunId)
                         .bind("name", name)
                         .map((rs, ctx) ->
                                 new Signal(
-                                        rs.getString("s_workflow_id"),
+                                        rs.getString("s_workflow_run_id"),
                                         rs.getString("s_name"),
                                         serializableColumnMapper.map(rs, "s_value", ctx),
                                         new Event(
@@ -228,15 +227,30 @@ public class WorkflowRepository {
                         .orElse(null));
     }
 
-    public WorkflowStatus getWorkflowStatus(String workflowId) {
-        EventStatus workflowStatus = getLatestEventStatus(workflowId, EventCategory.WORKFLOW);
-        List<Function> functions = getFunctions(workflowId);
+    public String getActiveWorkflowRunId(String workflowId) {
+        return jdbi.withHandle(handle ->
+                handle.createQuery("""
+                                SELECT id
+                                FROM workflow_run
+                                WHERE workflow_id = :workflowId
+                                    AND archived IS NULL
+                                """)
+                        .bind("workflowId", workflowId)
+                        .map((rs, ctx) ->
+                                rs.getString("id")
+                        ).one()
+        );
+    }
+
+    public WorkflowRunStatus getWorkflowRunStatus(String workflowRunId) {
+        EventStatus workflowStatus = getLatestEventStatus(workflowRunId, EventCategory.WORKFLOW);
+        List<Function> functions = getFunctions(workflowRunId);
         //TODO -- provide failed functions
-        return new WorkflowStatus(workflowStatus, functions);
+        return new WorkflowRunStatus(workflowStatus, functions);
 
     }
 
-    List<Function> getFunctions(String workflowId) {
+    List<Function> getFunctions(String workflowRunId) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
                                 SELECT
@@ -245,12 +259,12 @@ public class WorkflowRepository {
                                     started,
                                     completed
                                 FROM
-                                    v_workflow_function
+                                    v_workflow_run_function
                                 WHERE
-                                    workflow_id = :workflowId
+                                    workflow_run_id = :workflowRunId
                                 ORDER BY started
                                 """)
-                        .bind("workflowId", workflowId)
+                        .bind("workflowRunId", workflowRunId)
                         .map((rs, ctx) ->
                                 new Function(
                                         rs.getString("function_id"),
@@ -262,17 +276,17 @@ public class WorkflowRepository {
         );
     }
 
-    EventStatus getLatestEventStatus(String workflowId, EventCategory category) {
+    EventStatus getLatestEventStatus(String workflowRunId, EventCategory category) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
                                 SELECT status
                                 FROM event
-                                WHERE workflow_id = :workflowId
+                                WHERE workflow_run_id = :workflowRunId
                                     AND category = :category
                                 ORDER BY timestamp DESC
                                 LIMIT 1
                                 """)
-                        .bind("workflowId", workflowId)
+                        .bind("workflowRunId", workflowRunId)
                         .bind("category", category)
                         .map((rs, ctx) ->
                                 EventStatus.valueOf(rs.getString("status")))
@@ -281,21 +295,21 @@ public class WorkflowRepository {
         );
     }
 
-    public List<Event> getWorkflowEvents(String workflowId) {
+    public List<Event> getWorkflowEvents(String workflowRunId) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
                                 SELECT
                                     id,
-                                    workflow_id,
+                                    workflow_run_id,
                                     category,
                                     status,
                                     timestamp,
                                     function_id
-                                FROM v_workflow_event
-                                WHERE workflow_id = :workflowId
+                                FROM v_workflow_run_event
+                                WHERE workflow_run_id = :workflowRunId
                                 ORDER BY timestamp
                                 """)
-                        .bind("workflowId", workflowId)
+                        .bind("workflowRunId", workflowRunId)
                         .map((rs, ctx) ->
                                 new Event(
                                         eventCategoryColumnMapper.map(rs, "category", ctx),
@@ -307,19 +321,21 @@ public class WorkflowRepository {
         );
     }
 
-    public <O extends Serializable> Workflow<? extends Serializable, O>
-    getWorkflow(String workflowId, Class<? extends RunnableWorkflow<O, ? extends Serializable>> workflowClass) {
-        return getWorkflow(workflowId);
+    public <O extends Serializable> WorkflowRun<? extends Serializable, O>
+    getWorkflowRun(String workflowRunId, Class<? extends RunnableWorkflow<O, ? extends Serializable>> workflowClass) {
+        return getWorkflowRun(workflowRunId);
     }
 
-    public <I extends Serializable, O extends Serializable> Workflow<I, O> getWorkflow(String workflowId) {
+    public <I extends Serializable, O extends Serializable> WorkflowRun<I, O> getWorkflowRun(String workflowRunId) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
                                 SELECT
+                                    r.id as r_id,
                                     w.id as w_id,
                                     w.class_name as w_class_name,
                                     w.input as w_input,
-                                    w.output as w_output,
+                                    r.output as r_output,
+                                    r.created as r_created,
                                     w.created as w_created,
                                     scheduled.timestamp as scheduled_timestamp,
                                     scheduled.category as scheduled_category,
@@ -330,39 +346,45 @@ public class WorkflowRepository {
                                     completed.timestamp as completed_timestamp,
                                     completed.category as completed_category,
                                     completed.status as completed_status
-                                FROM workflow w
+                                FROM workflow_run r
+                                    INNER JOIN workflow w
+                                        ON r.workflow_id = w.id
                                   LEFT JOIN event scheduled
-                                    ON w.scheduled_event_id = scheduled.id
+                                    ON r.scheduled_event_id = scheduled.id
                                   LEFT JOIN event started
-                                    ON w.started_event_id = started.id
+                                    ON r.started_event_id = started.id
                                   LEFT JOIN event completed
-                                    ON w.completed_event_id = completed.id
-                                WHERE w.id = :id
+                                    ON r.completed_event_id = completed.id
+                                WHERE r.id = :id
                                 """)
-                        .bind("id", workflowId)
+                        .bind("id", workflowRunId)
                         .map((rs, ctx) ->
-                                new Workflow<>(
-                                        rs.getString("w_id"),
-                                        rs.getString("w_class_name"),
-                                        (I) serializableColumnMapper.map(rs, "w_input", ctx),
-                                        (O) serializableColumnMapper.map(rs, "w_output", ctx),
-                                        instantColumnMapper.map(rs, "w_created", ctx),
+                                new WorkflowRun<>(
+                                        rs.getString("r_id"),
+                                        new Workflow<>(
+                                                rs.getString("w_id"),
+                                                rs.getString("w_class_name"),
+                                                (I) serializableColumnMapper.map(rs, "w_input", ctx),
+                                                instantColumnMapper.map(rs, "w_created", ctx)
+                                        ),
+                                        (O) serializableColumnMapper.map(rs, "r_output", ctx),
+                                        instantColumnMapper.map(rs, "r_created", ctx),
                                         new Event(
                                                 eventCategoryColumnMapper.map(rs, "scheduled_category", ctx),
                                                 eventStatusColumnMapper.map(rs, "scheduled_status", ctx),
-                                                rs.getString("w_id"),
+                                                rs.getString("r_id"),
                                                 instantColumnMapper.map(rs, "scheduled_timestamp", ctx)
                                         ),
                                         new Event(
                                                 eventCategoryColumnMapper.map(rs, "started_category", ctx),
                                                 eventStatusColumnMapper.map(rs, "started_status", ctx),
-                                                rs.getString("w_id"),
+                                                rs.getString("r_id"),
                                                 instantColumnMapper.map(rs, "started_timestamp", ctx)
                                         ),
                                         new Event(
                                                 eventCategoryColumnMapper.map(rs, "completed_category", ctx),
                                                 eventStatusColumnMapper.map(rs, "completed_status", ctx),
-                                                rs.getString("w_id"),
+                                                rs.getString("r_id"),
                                                 instantColumnMapper.map(rs, "completed_timestamp", ctx)
                                         )
                                 ))
@@ -370,42 +392,52 @@ public class WorkflowRepository {
                         .orElse(null));
     }
 
-    public void newWorkflowScheduled(String workflowId, Class workflowClass, Object input) {
+    public String scheduleRunForNewWorkflow(String workflowId, Class workflowClass, Object input) {
+        String workflowRunId = UUID.randomUUID().toString();
         jdbi.useTransaction(handle -> {
-            Update update = handle.createUpdate("""
-                    INSERT INTO workflow (id, class_name, input, created)
-                    VALUES (:id, :class_name, :input, :created)
-                    """);
-            update.bind("id", workflowId);
-            update.bind("class_name", workflowClass.getName());
-            update.bind("created", Instant.now());
-            update.bind("input", serialize(input));
-            update.execute();
-
-            String eventId = newEvent(handle, workflowId, EventCategory.WORKFLOW, EventStatus.SCHEDULED);
 
             handle.createUpdate("""
-                            UPDATE workflow
-                            SET scheduled_event_id = :eventId
-                            WHERE id = :workflowId""")
-                    .bind("eventId", eventId)
+                            INSERT INTO workflow(id, class_name, input)
+                            VALUES (:id, :className, :input)
+                            """)
+                    .bind("id", workflowId)
+                    .bind("className", workflowClass.getName())
+                    .bind("input", serialize(input))
+                    .execute();
+
+            handle.createUpdate("""
+                            INSERT INTO workflow_run (id, workflow_id)
+                            VALUES (:id, :workflowId)
+                            """)
+                    .bind("id", workflowRunId)
                     .bind("workflowId", workflowId)
                     .execute();
+
+            String eventId = newEvent(handle, workflowRunId, EventCategory.WORKFLOW, EventStatus.SCHEDULED);
+
+            handle.createUpdate("""
+                            UPDATE workflow_run
+                            SET scheduled_event_id = :eventId
+                            WHERE id = :workflowRunId""")
+                    .bind("eventId", eventId)
+                    .bind("workflowRunId", workflowRunId)
+                    .execute();
         });
+        return workflowRunId;
 
     }
 
-    public void workflowStarted(String workflowId) {
+    public void workflowRunStarted(String workflowRunId) {
         jdbi.useTransaction(handle -> {
 
-            String eventId = newEvent(handle, workflowId, EventCategory.WORKFLOW, EventStatus.STARTED);
+            String eventId = newEvent(handle, workflowRunId, EventCategory.WORKFLOW, EventStatus.STARTED);
 
             handle.createUpdate("""
-                            UPDATE workflow
+                            UPDATE workflow_run
                             SET started_event_id = :eventId
-                            WHERE id = :workflowId""")
+                            WHERE id = :workflowRunId""")
                     .bind("eventId", eventId)
-                    .bind("workflowId", workflowId)
+                    .bind("workflowRunId", workflowRunId)
                     .execute();
         });
     }
@@ -420,74 +452,74 @@ public class WorkflowRepository {
         return byteStream.toByteArray();
     }
 
-    public void workflowCompleted(String workflowId, Object output) {
+    public void workflowRunCompleted(String workflowRunId, Object output) {
         jdbi.useTransaction(handle -> {
-            String eventId = newEvent(handle, workflowId, EventCategory.WORKFLOW, EventStatus.COMPLETED);
+            String eventId = newEvent(handle, workflowRunId, EventCategory.WORKFLOW, EventStatus.COMPLETED);
 
             handle.createUpdate("""
-                            UPDATE workflow
+                            UPDATE workflow_run
                             SET completed_event_id = :eventId,
                                 output = :output
-                            WHERE id = :workflowId""")
+                            WHERE id = :workflowRunId""")
                     .bind("eventId", eventId)
                     .bind("output", serialize(output))
-                    .bind("workflowId", workflowId)
+                    .bind("workflowRunId", workflowRunId)
                     .execute();
 
         });
     }
 
-    public void failWorkflow(String workflowId) {
+    public void failWorkflowRun(String workflowRunId) {
         jdbi.useTransaction(handle -> {
-            String eventId = newEvent(handle, workflowId, EventCategory.WORKFLOW, EventStatus.FAILED);
+            String eventId = newEvent(handle, workflowRunId, EventCategory.WORKFLOW, EventStatus.FAILED);
 
             handle.createUpdate("""
-                            UPDATE workflow
+                            UPDATE workflow_run
                             SET completed_event_id = :eventId
-                            WHERE id = :workflowId""")
+                            WHERE id = :workflowRunId""")
                     .bind("eventId", eventId)
-                    .bind("workflowId", workflowId)
+                    .bind("workflowRunId", workflowRunId)
                     .execute();
 
         });
     }
 
-    public void newConditionWaiting(String workflowId, String identifier) {
+    public void newConditionWaiting(String workflowRunId, String identifier) {
         jdbi.useTransaction(handle -> {
-            String eventId = newEvent(handle, workflowId, EventCategory.CONDITION, EventStatus.WAITING);
+            String eventId = newEvent(handle, workflowRunId, EventCategory.CONDITION, EventStatus.WAITING);
             handle.createUpdate("""
-                            INSERT INTO "condition"(workflow_id, identifier, waiting_event_id)
-                            VALUES (:workflowId, :identifier, :eventId)
+                            INSERT INTO "condition"(workflow_run_id, identifier, waiting_event_id)
+                            VALUES (:workflowRunId, :identifier, :eventId)
                             """)
-                    .bind("workflowId", workflowId)
+                    .bind("workflowRunId", workflowRunId)
                     .bind("identifier", identifier)
                     .bind("eventId", eventId)
                     .execute();
         });
     }
 
-    public void conditionSatisfied(String workflowId, String identifier) {
+    public void conditionSatisfied(String workflowRunId, String identifier) {
         jdbi.useTransaction(handle -> {
-            String eventId = newEvent(handle, workflowId, EventCategory.CONDITION, EventStatus.SATISFIED);
+            String eventId = newEvent(handle, workflowRunId, EventCategory.CONDITION, EventStatus.SATISFIED);
 
             handle.createUpdate("""
                             UPDATE "condition"
                             SET satisfied_event_id = :eventId
-                            WHERE workflow_id = :workflowId
+                            WHERE workflow_run_id = :workflowRunId
                                 AND identifier = :identifier""")
                     .bind("eventId", eventId)
                     .bind("identifier", identifier)
-                    .bind("workflowId", workflowId)
+                    .bind("workflowRunId", workflowRunId)
                     .execute();
 
         });
     }
 
-    public Condition getCondition(String workflowId, String identifier) {
+    public Condition getCondition(String workflowRunId, String identifier) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
                                 SELECT
-                                    c.workflow_id AS c_workflow_id,
+                                    c.workflow_run_id AS c_workflow_run_id,
                                     c.identifier AS c_identifier,
                                     waiting.timestamp AS waiting_timestamp,
                                     waiting.category AS waiting_category,
@@ -500,14 +532,14 @@ public class WorkflowRepository {
                                     ON c.waiting_event_id = waiting.id
                                   LEFT JOIN event satisfied
                                     ON c.satisfied_event_id = satisfied.id
-                                WHERE c.workflow_id = :workflowId
+                                WHERE c.workflow_run_id = :workflowRunId
                                     AND c.identifier = :identifier
                                 """)
-                        .bind("workflowId", workflowId)
+                        .bind("workflowRunId", workflowRunId)
                         .bind("identifier", identifier)
                         .map((rs, ctx) ->
                                 new Condition(
-                                        rs.getString("c_workflow_id"),
+                                        rs.getString("c_workflow_run_id"),
                                         rs.getString("c_identifier"),
                                         new Event(
                                                 eventCategoryColumnMapper.map(rs, "waiting_category", ctx),
@@ -526,14 +558,14 @@ public class WorkflowRepository {
                         .orElse(null));
     }
 
-    public void newSleepStarted(String workflowId, String identifier, Duration duration) {
+    public void newSleepStarted(String workflowRunId, String identifier, Duration duration) {
         jdbi.useTransaction(handle -> {
-            String eventId = newEvent(handle, workflowId, EventCategory.SLEEP, EventStatus.STARTED);
+            String eventId = newEvent(handle, workflowRunId, EventCategory.SLEEP, EventStatus.STARTED);
             handle.createUpdate("""
-                            INSERT INTO sleep(workflow_id, identifier, duration_in_millis, started_event_id)
-                            VALUES (:workflowId, :identifier, :durationInMillis, :eventId)
+                            INSERT INTO sleep(workflow_run_id, identifier, duration_in_millis, started_event_id)
+                            VALUES (:workflowRunId, :identifier, :durationInMillis, :eventId)
                             """)
-                    .bind("workflowId", workflowId)
+                    .bind("workflowRunId", workflowRunId)
                     .bind("identifier", identifier)
                     .bind("durationInMillis", duration.toMillis())
                     .bind("eventId", eventId)
@@ -541,28 +573,28 @@ public class WorkflowRepository {
         });
     }
 
-    public void sleepCompleted(String workflowId, String identifier) {
+    public void sleepCompleted(String workflowRunId, String identifier) {
         jdbi.useTransaction(handle -> {
-            String eventId = newEvent(handle, workflowId, EventCategory.SLEEP, EventStatus.COMPLETED);
+            String eventId = newEvent(handle, workflowRunId, EventCategory.SLEEP, EventStatus.COMPLETED);
 
             handle.createUpdate("""
                             UPDATE sleep
                             SET completed_event_id = :eventId
-                            WHERE workflow_id = :workflowId
+                            WHERE workflow_run_id = :workflowRunId
                                 AND identifier = :identifier""")
                     .bind("eventId", eventId)
                     .bind("identifier", identifier)
-                    .bind("workflowId", workflowId)
+                    .bind("workflowRunId", workflowRunId)
                     .execute();
 
         });
     }
 
-    public Sleep getSleep(String workflowId, String identifier) {
+    public Sleep getSleep(String workflowRunId, String identifier) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
                                 SELECT
-                                    s.workflow_id AS s_workflow_id,
+                                    s.workflow_run_id AS s_workflow_run_id,
                                     s.identifier AS s_identifier,
                                     s.duration_in_millis AS s_duration_in_millis,
                                     started.timestamp AS started_timestamp,
@@ -576,14 +608,14 @@ public class WorkflowRepository {
                                     ON s.started_event_id = started.id
                                   LEFT JOIN event completed
                                     ON s.completed_event_id = completed.id
-                                WHERE s.workflow_id = :workflowId
+                                WHERE s.workflow_run_id = :workflowRunId
                                     AND s.identifier = :identifier
                                 """)
-                        .bind("workflowId", workflowId)
+                        .bind("workflowRunId", workflowRunId)
                         .bind("identifier", identifier)
                         .map((rs, ctx) ->
                                 new Sleep(
-                                        rs.getString("s_workflow_id"),
+                                        rs.getString("s_workflow_run_id"),
                                         rs.getString("s_identifier"),
                                         Duration.ofMillis(rs.getLong("s_duration_in_millis")),
                                         new Event(

@@ -3,7 +3,7 @@ package aptvantage.aptflow.model;
 import java.io.Serializable;
 
 public record Activity(
-        String workflowId,
+        String workflowRunId,
         String name,
         Serializable output,
         Event started,
@@ -14,6 +14,6 @@ public record Activity(
     }
 
     public String key() {
-        return "%s::%s".formatted(workflowId, name);
+        return "%s::%s".formatted(workflowRunId, name);
     }
 }

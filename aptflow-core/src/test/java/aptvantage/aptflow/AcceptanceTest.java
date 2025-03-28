@@ -162,19 +162,37 @@ public class AcceptanceTest {
 
     @Test
     @Execution(ExecutionMode.CONCURRENT)
-    public void test() throws Exception {
+    public void testExampleWorkflowWithAllFunctions() throws Exception {
+        // When a workflow with all functions is run
+        String workflowId = "testExampleWorkflowWithAllFunctions";
+        aptWorkflow.runWorkflow(ExampleWorkflowWithAllFunctions.class, 666, workflowId);
 
-        String workflowId = "test-workflow";
-        aptWorkflow.runWorkflow(ExampleWorkflow.class, 666, workflowId);
-
+        // then the workflow will start
         Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() ->
-                aptWorkflow.getWorkflowStatus(workflowId).status() != EventStatus.SCHEDULED);
+                aptWorkflow.getWorkflowStatus(workflowId).hasStarted());
 
+        // and the workflow will eventually wait for a signal
+        Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() ->
+                aptWorkflow.getWorkflowStatus(workflowId).isWaitingForSignal());
+
+        // when we signal the workflow
         aptWorkflow.signalWorkflow(workflowId, "OkToResume", true);
 
-        Awaitility.await().atMost(1, TimeUnit.MINUTES)
-                .until(() -> "666asdf".equals(aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflow.class)));
-        System.out.println("done: " + aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflow.class));
+        // then the workflow will eventually complete
+        Awaitility.await().atMost(1, TimeUnit.MINUTES).until(() ->
+                aptWorkflow.getWorkflowStatus(workflowId).isComplete()
+        );
+
+        // and the output is correct (which also implies successful completion)
+        assertEquals("666asdf", aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithAllFunctions.class));
+
+        // and the event stack contains every function
+        List<Event> events = aptWorkflow.getWorkflowEvents(workflowId);
+        assertTrue(events.stream().anyMatch(event -> event.category() == EventCategory.ACTIVITY));
+        assertTrue(events.stream().anyMatch(event -> event.category() == EventCategory.SIGNAL));
+        assertTrue(events.stream().anyMatch(event -> event.category() == EventCategory.SLEEP));
+        assertTrue(events.stream().anyMatch(event -> event.category() == EventCategory.WORKFLOW));
+        assertTrue(events.stream().anyMatch(event -> event.category() == EventCategory.CONDITION));
     }
 
     @Nested
@@ -252,8 +270,8 @@ public class AcceptanceTest {
             // and the event sequence is correct
             List<Event> events = aptWorkflow.getWorkflowEvents(workflowId);
             assertEquals(15, events.size());
-            assertTrue(eventMatches(events.get(0), EventCategory.WORKFLOW, EventStatus.SCHEDULED, "testWorkflowWithNestedActivities"));
-            assertTrue(eventMatches(events.get(1), EventCategory.WORKFLOW, EventStatus.STARTED, "testWorkflowWithNestedActivities"));
+            assertTrue(eventMatches(events.get(0), EventCategory.WORKFLOW, EventStatus.SCHEDULED));
+            assertTrue(eventMatches(events.get(1), EventCategory.WORKFLOW, EventStatus.STARTED));
             assertTrue(eventMatches(events.get(2), EventCategory.ACTIVITY, EventStatus.STARTED, "1"));
             assertTrue(eventMatches(events.get(3), EventCategory.ACTIVITY, EventStatus.STARTED, "1.1"));
             assertTrue(eventMatches(events.get(4), EventCategory.SLEEP, EventStatus.STARTED, "1.1.1"));
@@ -266,7 +284,7 @@ public class AcceptanceTest {
             assertTrue(eventMatches(events.get(11), EventCategory.ACTIVITY, EventStatus.COMPLETED, "1.1.3"));
             assertTrue(eventMatches(events.get(12), EventCategory.ACTIVITY, EventStatus.COMPLETED, "1.1"));
             assertTrue(eventMatches(events.get(13), EventCategory.ACTIVITY, EventStatus.COMPLETED, "1"));
-            assertTrue(eventMatches(events.get(14), EventCategory.WORKFLOW, EventStatus.COMPLETED, "testWorkflowWithNestedActivities"));
+            assertTrue(eventMatches(events.get(14), EventCategory.WORKFLOW, EventStatus.COMPLETED));
 
         }
 
@@ -285,13 +303,13 @@ public class AcceptanceTest {
             // and the event sequence is correct
             List<Event> events = aptWorkflow.getWorkflowEvents(workflowId);
             assertEquals(7, events.size()); // 3 workflow + 2 for successful activity + 2 for failed activity
-            assertTrue(eventMatches(events.get(0), EventCategory.WORKFLOW, EventStatus.SCHEDULED, "testWorkflowWithFailedRunnableActivity"));
-            assertTrue(eventMatches(events.get(1), EventCategory.WORKFLOW, EventStatus.STARTED, "testWorkflowWithFailedRunnableActivity"));
+            assertTrue(eventMatches(events.get(0), EventCategory.WORKFLOW, EventStatus.SCHEDULED));
+            assertTrue(eventMatches(events.get(1), EventCategory.WORKFLOW, EventStatus.STARTED));
             assertTrue(eventMatches(events.get(2), EventCategory.ACTIVITY, EventStatus.STARTED));
             assertTrue(eventMatches(events.get(3), EventCategory.ACTIVITY, EventStatus.COMPLETED));
             assertTrue(eventMatches(events.get(4), EventCategory.ACTIVITY, EventStatus.STARTED));
             assertTrue(eventMatches(events.get(5), EventCategory.ACTIVITY, EventStatus.FAILED));
-            assertTrue(eventMatches(events.get(6), EventCategory.WORKFLOW, EventStatus.FAILED, "testWorkflowWithFailedRunnableActivity"));
+            assertTrue(eventMatches(events.get(6), EventCategory.WORKFLOW, EventStatus.FAILED));
         }
 
         @Test
@@ -309,11 +327,11 @@ public class AcceptanceTest {
             // and the event sequence is correct
             List<Event> events = aptWorkflow.getWorkflowEvents(workflowId);
             assertEquals(5, events.size()); // 3 workflow + 2 for failed activity
-            assertTrue(eventMatches(events.get(0), EventCategory.WORKFLOW, EventStatus.SCHEDULED, "testWorkflowWithFailedSupplierActivity"));
-            assertTrue(eventMatches(events.get(1), EventCategory.WORKFLOW, EventStatus.STARTED, "testWorkflowWithFailedSupplierActivity"));
+            assertTrue(eventMatches(events.get(0), EventCategory.WORKFLOW, EventStatus.SCHEDULED));
+            assertTrue(eventMatches(events.get(1), EventCategory.WORKFLOW, EventStatus.STARTED));
             assertTrue(eventMatches(events.get(2), EventCategory.ACTIVITY, EventStatus.STARTED));
             assertTrue(eventMatches(events.get(3), EventCategory.ACTIVITY, EventStatus.FAILED));
-            assertTrue(eventMatches(events.get(4), EventCategory.WORKFLOW, EventStatus.FAILED, "testWorkflowWithFailedSupplierActivity"));
+            assertTrue(eventMatches(events.get(4), EventCategory.WORKFLOW, EventStatus.FAILED));
         }
 
     }
