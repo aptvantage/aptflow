@@ -15,6 +15,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicReference;
 
 public class WorkflowRepository {
 
@@ -242,6 +243,38 @@ public class WorkflowRepository {
         );
     }
 
+    public String scheduleNewRunForExistingWorkflow(String workflowId) {
+        String activeRunId = getActiveWorkflowRunId(workflowId);
+        WorkflowRun activeRun = getWorkflowRun(activeRunId);
+
+        AtomicReference<String> newRunId = new AtomicReference<>();
+        jdbi.useTransaction(handle -> {
+            // archive existing run
+            handle.createUpdate("""
+                            UPDATE workflow_run
+                            SET archived = :archived
+                            WHERE id = :activeRunId
+                            """)
+                    .bind("archived", Instant.now())
+                    .bind("activeRunId", activeRunId)
+                    .execute();
+
+            //schedule new run
+            newRunId.set(scheduleWorkflowRun(workflowId, workflowClassFromClassName(activeRun.workflow().className()), handle));
+        });
+
+        return newRunId.get();
+
+    }
+
+    private <I extends Serializable, O extends Serializable> Class<? extends RunnableWorkflow<I,O>> workflowClassFromClassName(String className) {
+        try {
+            return (Class<? extends RunnableWorkflow<I,O>>) Class.forName(className);
+        } catch (ClassNotFoundException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
     public WorkflowRunStatus getWorkflowRunStatus(String workflowRunId) {
         EventStatus workflowStatus = getLatestEventStatus(workflowRunId, EventCategory.WORKFLOW);
         List<Function> functions = getFunctions(workflowRunId);
@@ -392,8 +425,41 @@ public class WorkflowRepository {
                         .orElse(null));
     }
 
-    public String scheduleRunForNewWorkflow(String workflowId, Class workflowClass, Object input) {
+    private <I extends Serializable, O extends Serializable> String scheduleWorkflowRun(
+            String workflowId,
+            Class<? extends RunnableWorkflow<I, O>> workflowClass,
+            Handle handle) {
+
         String workflowRunId = UUID.randomUUID().toString();
+
+        handle.createUpdate("""
+                        INSERT INTO workflow_run (id, workflow_id)
+                        VALUES (:id, :workflowId)
+                        """)
+                .bind("id", workflowRunId)
+                .bind("workflowId", workflowId)
+                .execute();
+
+        String eventId = newEvent(handle, workflowRunId, EventCategory.WORKFLOW, EventStatus.SCHEDULED);
+
+        handle.createUpdate("""
+                        UPDATE workflow_run
+                        SET scheduled_event_id = :eventId
+                        WHERE id = :workflowRunId""")
+                .bind("eventId", eventId)
+                .bind("workflowRunId", workflowRunId)
+                .execute();
+
+        return workflowRunId;
+
+    }
+
+    public <I extends Serializable, O extends Serializable> String scheduleRunForNewWorkflow(
+            String workflowId,
+            Class<? extends RunnableWorkflow<I, O>> workflowClass,
+            I input) {
+
+        AtomicReference<String> workflowRunId = new AtomicReference<>();
         jdbi.useTransaction(handle -> {
 
             handle.createUpdate("""
@@ -405,25 +471,9 @@ public class WorkflowRepository {
                     .bind("input", serialize(input))
                     .execute();
 
-            handle.createUpdate("""
-                            INSERT INTO workflow_run (id, workflow_id)
-                            VALUES (:id, :workflowId)
-                            """)
-                    .bind("id", workflowRunId)
-                    .bind("workflowId", workflowId)
-                    .execute();
-
-            String eventId = newEvent(handle, workflowRunId, EventCategory.WORKFLOW, EventStatus.SCHEDULED);
-
-            handle.createUpdate("""
-                            UPDATE workflow_run
-                            SET scheduled_event_id = :eventId
-                            WHERE id = :workflowRunId""")
-                    .bind("eventId", eventId)
-                    .bind("workflowRunId", workflowRunId)
-                    .execute();
+            workflowRunId.set(scheduleWorkflowRun(workflowId, workflowClass, handle));
         });
-        return workflowRunId;
+        return workflowRunId.get();
 
     }
 

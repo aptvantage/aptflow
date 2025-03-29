@@ -52,6 +52,37 @@ public class AcceptanceTest {
 
     @Test
     @Execution(ExecutionMode.CONCURRENT)
+    public void testReRunWorkflow() throws Exception {
+        // When a workflow runs
+        String workflowId = "testReRunWorkflow";
+        aptWorkflow.runWorkflow(ExampleSimpleWorkflow.class,888, workflowId);
+
+        // then it will eventually complete
+        Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() ->
+                aptWorkflow.getWorkflowStatus(workflowId).isComplete());
+
+        // and then the output is correct
+        String output = aptWorkflow.getWorkflowOutput(workflowId, ExampleSimpleWorkflow.class);
+        assertEquals("888", output);
+
+        // and when we re-run the workflow
+        aptWorkflow.reRunWorkflowFromStart(workflowId);
+
+        // then the workflow eventually completes again
+        Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() ->
+                aptWorkflow.getWorkflowStatus(workflowId).isComplete());
+
+        // and then the output is correct again
+        output = aptWorkflow.getWorkflowOutput(workflowId, ExampleSimpleWorkflow.class);
+        assertEquals("888", output);
+
+        // and the expected run history is correct
+        //TODO run history
+
+    }
+
+    @Test
+    @Execution(ExecutionMode.CONCURRENT)
     public void testSimpleWorkflow() throws Exception {
         // given a simple workflow that converts an integer to a string
         String workflowId = "testSimpleWorkflow";

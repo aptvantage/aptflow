@@ -155,9 +155,21 @@ public class WorkflowExecutor {
         Awaitility.await().atMost(20, TimeUnit.SECONDS).until(() -> this.workflowRepository.isSignalReceived(workflowId, signalName));
     }
 
-    public <I extends Serializable> void runWorkflow(Class<? extends RunnableWorkflow<I, ?>> workflowClass, I workflowParam, String workflowId) {
+    public <I extends Serializable, O extends Serializable> void runWorkflow(Class<? extends RunnableWorkflow<I, O>> workflowClass, I workflowParam, String workflowId) {
         logger.atInfo().log("scheduling run for new workflow [%s] of type [%s]", workflowId, workflowClass.getName());
         String workflowRunId = this.workflowRepository.scheduleRunForNewWorkflow(workflowId, workflowClass, workflowParam);
+        startRun(workflowId, workflowRunId);
+    }
+
+    public void reRunWorkflowFromStart(String workflowId) {
+        // TODO - test this should fail if workflow does not exist
+        // TODO - test this should fail if existing workflow's latest run is not in a terminal state
+        logger.atInfo().log("scheduling re-run of existing workflow [%s]", workflowId);
+        String workflowRunId = workflowRepository.scheduleNewRunForExistingWorkflow(workflowId);
+        startRun(workflowId, workflowRunId);
+    }
+
+    private void startRun(String workflowId, String workflowRunId) {
         TaskInstance<RunWorkflowTaskInput> instance = startWorkflowTask.instance(
                 "workflow::%s::%s".formatted(workflowId, workflowRunId),
                 new RunWorkflowTaskInput(workflowRunId));
@@ -183,5 +195,4 @@ public class WorkflowExecutor {
             this.executionContext.remove();
         });
     }
-
 }

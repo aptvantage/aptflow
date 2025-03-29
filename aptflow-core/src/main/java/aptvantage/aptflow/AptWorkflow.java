@@ -38,9 +38,18 @@ public class AptWorkflow {
         this.workflowExecutor.signalWorkflowRun(workflowRunId, signalName, signalValue);
     }
 
-    public <I extends Serializable> void runWorkflow(Class<? extends RunnableWorkflow<I, ?>> workflowClass, I workflowParam, String workflowId) {
-        this.workflowExecutor.runWorkflow(workflowClass, workflowParam, workflowId);
+    public <I extends Serializable, O extends Serializable> void runWorkflow(
+            Class<? extends RunnableWorkflow<I, O>> workflowClass,
+            I workflowInput,
+            String workflowId) {
+        this.workflowExecutor.runWorkflow(workflowClass, workflowInput, workflowId);
     }
+    public void reRunWorkflowFromStart(String workflowId) {
+        this.workflowExecutor.reRunWorkflowFromStart(workflowId);
+    }
+
+    //TODO -- reRunWorkflowFromFailed
+
 
     public <O extends Serializable> O getWorkflowOutput(String workflowId, Class<? extends RunnableWorkflow<? extends Serializable, O>> workflowClass) {
         String workflowRunId = repository.getActiveWorkflowRunId(workflowId);
