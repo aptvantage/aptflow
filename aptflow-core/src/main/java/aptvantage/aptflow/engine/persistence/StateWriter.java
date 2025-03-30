@@ -311,7 +311,18 @@ public class StateWriter {
             Class<? extends RunnableWorkflow<I, O>> workflowClass,
             Handle handle) {
 
-        String workflowRunId = UUID.randomUUID().toString();
+        int existingRunCount = handle.createQuery("""
+                        SELECT count(id)
+                        FROM workflow_run
+                        WHERE workflow_id = :workflowId
+                        """)
+                .bind("workflowId", workflowId)
+                .map((rs, ctx) ->
+                        rs.getInt(1)
+                )
+                .one();
+
+        String workflowRunId = "%s::%s".formatted(workflowId, ++existingRunCount);
 
         handle.createUpdate("""
                         INSERT INTO workflow_run (id, workflow_id)

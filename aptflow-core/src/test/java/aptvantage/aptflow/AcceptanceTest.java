@@ -1,9 +1,8 @@
 package aptvantage.aptflow;
 
+import aptvantage.aptflow.api.RunnableWorkflow;
 import aptvantage.aptflow.examples.*;
-import aptvantage.aptflow.model.StepFunctionEvent;
-import aptvantage.aptflow.model.StepFunctionEventStatus;
-import aptvantage.aptflow.model.StepFunctionType;
+import aptvantage.aptflow.model.*;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.parallel.Execution;
@@ -56,29 +55,35 @@ public class AcceptanceTest {
     public void testReRunWorkflow() throws Exception {
         // When a workflow runs
         String workflowId = "testReRunWorkflow";
-        aptWorkflow.runWorkflow(ExampleSimpleWorkflow.class, 888, workflowId);
+        Class<? extends RunnableWorkflow<Integer, String>> workflowClass = ExampleSimpleWorkflow.class;
+        aptWorkflow.runWorkflow(workflowClass, 888, workflowId);
 
         // then it will eventually complete
         Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() ->
-                aptWorkflow.getWorkflowStatus(workflowId).hasCompleted());
+                aptWorkflow.getLatestRun(workflowId).hasCompleted());
 
         // and then the output is correct
-        String output = aptWorkflow.getWorkflowOutput(workflowId, ExampleSimpleWorkflow.class);
-        assertEquals("888", output);
+        WorkflowRun<Integer, String> run1 = aptWorkflow.getLatestRun(workflowId, workflowClass);
+        assertEquals("888", run1.getOutput());
+        assertEquals("testReRunWorkflow::1", run1.getId());
 
         // and when we re-run the workflow
         aptWorkflow.reRunWorkflowFromStart(workflowId);
 
         // then the workflow eventually completes again
         Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() ->
-                aptWorkflow.getWorkflowStatus(workflowId).hasCompleted());
+                aptWorkflow.getLatestRun(workflowId).hasCompleted());
 
         // and then the output is correct again
-        output = aptWorkflow.getWorkflowOutput(workflowId, ExampleSimpleWorkflow.class);
-        assertEquals("888", output);
+        WorkflowRun<Integer, String> run2 = aptWorkflow.getLatestRun(workflowId, workflowClass);
+        assertEquals("888", run2.getOutput());
+        assertEquals("testReRunWorkflow::2", run2.getId());
 
         // and the expected run history is correct
-        //TODO run history
+        Workflow<Integer, String> result = aptWorkflow.getWorkflowResult(workflowId, workflowClass);
+        assertEquals(2, result.getWorkflowRuns().size());
+        assertEquals("testReRunWorkflow::1", result.getWorkflowRuns().get(0).getId());
+        assertEquals("testReRunWorkflow::2", result.getWorkflowRuns().get(1).getId());
 
     }
 
@@ -87,19 +92,20 @@ public class AcceptanceTest {
     public void testSimpleWorkflow() throws Exception {
         // given a simple workflow that converts an integer to a string
         String workflowId = "testSimpleWorkflow";
+        Class<? extends RunnableWorkflow<Integer, String>> workflowClass = ExampleSimpleWorkflow.class;
 
         // when the workflow is submitted
-        aptWorkflow.runWorkflow(ExampleSimpleWorkflow.class, 777, workflowId);
+        aptWorkflow.runWorkflow(workflowClass, 777, workflowId);
 
         // then it eventually completes
         Awaitility.await().atMost(1, TimeUnit.MINUTES)
-                .until(() -> aptWorkflow.getWorkflowStatus(workflowId).hasCompleted());
+                .until(() -> aptWorkflow.getLatestRun(workflowId).hasCompleted());
 
         // and the expected output is correct
-        String output = aptWorkflow.getWorkflowOutput(workflowId, ExampleSimpleWorkflow.class);
+        String output = aptWorkflow.getLatestRun(workflowId, workflowClass).getOutput();
         assertEquals("777", output);
 
-        List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getWorkflowEvents(workflowId);
+        List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getLatestRun(workflowId, workflowClass).getFunctionEvents();
         assertEquals(3, events.size());
         assertTrue(eventMatches(events.get(0), StepFunctionType.WORKFLOW, StepFunctionEventStatus.SCHEDULED));
         assertTrue(eventMatches(events.get(1), StepFunctionType.WORKFLOW, StepFunctionEventStatus.STARTED));
@@ -112,11 +118,12 @@ public class AcceptanceTest {
     public void testWorkflowWithSignal() throws Exception {
         // given a running workflow with a signal has been started
         String workflowId = "testWorkflowWithSignal";
-        aptWorkflow.runWorkflow(ExampleWorkflowWithSignal.class, 777, workflowId);
+        Class<? extends RunnableWorkflow<Integer, String>> workflowClass = ExampleWorkflowWithSignal.class;
+        aptWorkflow.runWorkflow(workflowClass, 777, workflowId);
 
         // then the workflow will eventually be waiting for a signal
         Awaitility.await().atMost(10, TimeUnit.SECONDS).until(
-                () -> aptWorkflow.getWorkflowStatus(workflowId).isWaitingForSignal()
+                () -> aptWorkflow.getLatestRun(workflowId).isWaitingForSignal()
         );
 
         // and when the signal is sent
@@ -124,14 +131,14 @@ public class AcceptanceTest {
 
         // then the workflow completes
         Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() ->
-                aptWorkflow.getWorkflowStatus(workflowId).hasCompleted()
+                aptWorkflow.getLatestRun(workflowId).hasCompleted()
         );
 
         // and the expected result is received
-        assertEquals("7770", aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithSignal.class));
+        assertEquals("7770", aptWorkflow.getLatestRun(workflowId, workflowClass).getOutput());
 
         // and the event sequence is correct
-        List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getWorkflowEvents(workflowId);
+        List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getLatestRun(workflowId, workflowClass).getFunctionEvents();
         assertEquals(5, events.size());  // 3 WORKFLOW events and 2 SIGNAL events
         assertTrue(eventMatches(events.get(0), StepFunctionType.WORKFLOW, StepFunctionEventStatus.SCHEDULED));
         assertTrue(eventMatches(events.get(1), StepFunctionType.WORKFLOW, StepFunctionEventStatus.STARTED));
@@ -146,18 +153,19 @@ public class AcceptanceTest {
     public void testWorkflowWithSleep() throws Exception {
         // given a workflow ran with sleep functions
         String workflowId = "testWorkflowWithSleep";
-        aptWorkflow.runWorkflow(ExampleWorkflowWithSleep.class, 777, workflowId);
+        Class<? extends RunnableWorkflow<Integer, String>> workflowClass = ExampleWorkflowWithSleep.class;
+        aptWorkflow.runWorkflow(workflowClass, 777, workflowId);
 
         // then the workflow will eventually complete
         Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() ->
-                aptWorkflow.getWorkflowStatus(workflowId).hasCompleted());
+                aptWorkflow.getLatestRun(workflowId).hasCompleted());
 
         // and the output is correct
-        String output = aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithSleep.class);
+        String output = aptWorkflow.getLatestRun(workflowId, workflowClass).getOutput();
         assertEquals("777", output);
 
         // and the event sequence is correct
-        List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getWorkflowEvents(workflowId);
+        List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getLatestRun(workflowId, workflowClass).getFunctionEvents();
         assertEquals(5, events.size());
         assertTrue(eventMatches(events.get(0), StepFunctionType.WORKFLOW, StepFunctionEventStatus.SCHEDULED));
         assertTrue(eventMatches(events.get(1), StepFunctionType.WORKFLOW, StepFunctionEventStatus.STARTED));
@@ -171,18 +179,19 @@ public class AcceptanceTest {
     public void testWorkflowWithCondition() throws Exception {
         // given a workflow run with a condition
         String workflowId = "testWorkflowWithCondition";
-        aptWorkflow.runWorkflow(ExampleWorkflowWithCondition.class, 3, workflowId);
+        Class<? extends RunnableWorkflow<Integer, String>> workflowClass = ExampleWorkflowWithCondition.class;
+        aptWorkflow.runWorkflow(workflowClass, 3, workflowId);
 
         // then the workflow eventually completes
         Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() ->
-                aptWorkflow.getWorkflowStatus(workflowId).hasCompleted());
+                aptWorkflow.getLatestRun(workflowId).hasCompleted());
 
         // and the output is correct
-        String output = aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithCondition.class);
+        String output = aptWorkflow.getLatestRun(workflowId, workflowClass).getOutput();
         assertEquals("3", output);
 
         // and the event sequence is correct
-        List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getWorkflowEvents(workflowId);
+        List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getLatestRun(workflowId, workflowClass).getFunctionEvents();
         assertEquals(5, events.size());
         assertTrue(eventMatches(events.get(0), StepFunctionType.WORKFLOW, StepFunctionEventStatus.SCHEDULED));
         assertTrue(eventMatches(events.get(1), StepFunctionType.WORKFLOW, StepFunctionEventStatus.STARTED));
@@ -197,29 +206,30 @@ public class AcceptanceTest {
     public void testExampleWorkflowWithAllFunctions() throws Exception {
         // When a workflow with all functions is run
         String workflowId = "testExampleWorkflowWithAllFunctions";
-        aptWorkflow.runWorkflow(ExampleWorkflowWithAllFunctions.class, 666, workflowId);
+        Class<? extends RunnableWorkflow<Integer, String>> workflowClass = ExampleWorkflowWithAllFunctions.class;
+        aptWorkflow.runWorkflow(workflowClass, 666, workflowId);
 
         // then the workflow will start
         Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() ->
-                aptWorkflow.getWorkflowStatus(workflowId).hasStarted());
+                aptWorkflow.getLatestRun(workflowId).hasStarted());
 
         // and the workflow will eventually wait for a signal
         Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() ->
-                aptWorkflow.getWorkflowStatus(workflowId).isWaitingForSignal());
+                aptWorkflow.getLatestRun(workflowId).isWaitingForSignal());
 
         // when we signal the workflow
         aptWorkflow.signalWorkflow(workflowId, "OkToResume", true);
 
         // then the workflow will eventually complete
         Awaitility.await().atMost(1, TimeUnit.MINUTES).until(() ->
-                aptWorkflow.getWorkflowStatus(workflowId).hasCompleted()
+                aptWorkflow.getLatestRun(workflowId).hasCompleted()
         );
 
         // and the output is correct (which also implies successful completion)
-        assertEquals("666asdf", aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithAllFunctions.class));
+        assertEquals("666asdf", aptWorkflow.getLatestRun(workflowId, workflowClass).getOutput());
 
         // and the event stack contains every function
-        List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getWorkflowEvents(workflowId);
+        List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getLatestRun(workflowId, workflowClass).getFunctionEvents();
         assertTrue(events.stream().anyMatch(event -> event.getFunctionType() == StepFunctionType.ACTIVITY));
         assertTrue(events.stream().anyMatch(event -> event.getFunctionType() == StepFunctionType.SIGNAL));
         assertTrue(events.stream().anyMatch(event -> event.getFunctionType() == StepFunctionType.SLEEP));
@@ -236,18 +246,19 @@ public class AcceptanceTest {
         public void testWorkflowWithActivity() throws Exception {
             //given we run a workflow with an activity
             String workflowId = "testWorkflowWithActivity";
-            aptWorkflow.runWorkflow(ExampleWorkflowWithActivity.class, 777, workflowId);
+            Class<? extends RunnableWorkflow<Integer, String>> workflowClass = ExampleWorkflowWithActivity.class;
+            aptWorkflow.runWorkflow(workflowClass, 777, workflowId);
 
             // when the workflow completes
             Awaitility.await().atMost(1, TimeUnit.MINUTES)
-                    .until(() -> aptWorkflow.getWorkflowStatus(workflowId).hasCompleted());
+                    .until(() -> aptWorkflow.getLatestRun(workflowId).hasCompleted());
 
             // then the output is correct
-            String output = aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithActivity.class);
+            String output = aptWorkflow.getLatestRun(workflowId, workflowClass).getOutput();
             assertEquals("777", output);
 
             // and the event sequence is correct
-            List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getWorkflowEvents(workflowId);
+            List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getLatestRun(workflowId, workflowClass).getFunctionEvents();
             assertEquals(5, events.size()); // 3 workflow and 2 activity
             assertTrue(eventMatches(events.get(0), StepFunctionType.WORKFLOW, StepFunctionEventStatus.SCHEDULED));
             assertTrue(eventMatches(events.get(1), StepFunctionType.WORKFLOW, StepFunctionEventStatus.STARTED));
@@ -261,18 +272,19 @@ public class AcceptanceTest {
         public void testWorkflowWithAsyncActivities() throws Exception {
             // given we run a workflow with async
             String workflowId = "testWorkflowWithAsyncActivities";
-            aptWorkflow.runWorkflow(ExampleWorkflowWithAsyncActivities.class, 777, workflowId);
+            Class<? extends RunnableWorkflow<Integer, String>> workflowClass = ExampleWorkflowWithAsyncActivities.class;
+            aptWorkflow.runWorkflow(workflowClass, 777, workflowId);
 
             // then it will eventually finish
             Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() ->
-                    aptWorkflow.getWorkflowStatus(workflowId).hasCompleted());
+                    aptWorkflow.getLatestRun(workflowId).hasCompleted());
 
             // and the output will be correct
-            String output = aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithAsyncActivities.class);
+            String output = aptWorkflow.getLatestRun(workflowId, workflowClass).getOutput();
             assertEquals("param: [777] oneSecondEcho: [1-seconds] twoSecondEcho: [2-seconds]", output);
 
             // and the activities run in parallel (2 activity starts followed by 2 completes)
-            List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getWorkflowEvents(workflowId);
+            List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getLatestRun(workflowId, workflowClass).getFunctionEvents();
             assertEquals(7, events.size());
             assertTrue(eventMatches(events.get(0), StepFunctionType.WORKFLOW, StepFunctionEventStatus.SCHEDULED));
             assertTrue(eventMatches(events.get(1), StepFunctionType.WORKFLOW, StepFunctionEventStatus.STARTED));
@@ -289,18 +301,19 @@ public class AcceptanceTest {
 
             // given we run a workflow with nested activity
             String workflowId = "testWorkflowWithNestedActivities";
-            aptWorkflow.runWorkflow(ExampleWorkflowWithNestedActivities.class, "900", workflowId);
+            Class<? extends RunnableWorkflow<String, Integer>> workflowClass = ExampleWorkflowWithNestedActivities.class;
+            aptWorkflow.runWorkflow(workflowClass, "900", workflowId);
 
             // then the workflow eventually completes
             Awaitility.await().atMost(1, TimeUnit.MINUTES)
-                    .until(() -> aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithNestedActivities.class) != null);
+                    .until(() -> aptWorkflow.getLatestRun(workflowId).hasCompleted());
 
             // and the output is correct
-            int output = aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithNestedActivities.class);
+            int output = aptWorkflow.getLatestRun(workflowId, workflowClass).getOutput();
             assertEquals(900, output);
 
             // and the event sequence is correct
-            List<StepFunctionEvent<String, Integer>> events = aptWorkflow.getWorkflowEvents(workflowId);
+            List<StepFunctionEvent<String, Integer>> events = aptWorkflow.getLatestRun(workflowId, workflowClass).getFunctionEvents();
             assertEquals(15, events.size());
             assertTrue(eventMatches(events.get(0), StepFunctionType.WORKFLOW, StepFunctionEventStatus.SCHEDULED));
             assertTrue(eventMatches(events.get(1), StepFunctionType.WORKFLOW, StepFunctionEventStatus.STARTED));
@@ -325,15 +338,16 @@ public class AcceptanceTest {
         public void testWorkflowWithFailedRunnableActivity() throws Exception {
             // given a workflow that will fail
             String workflowId = "testWorkflowWithFailedRunnableActivity";
-            aptWorkflow.runWorkflow(ExampleWorkflowWithFailedRunnableActivity.class, 13, workflowId);
+            Class<? extends RunnableWorkflow<Integer, String>> workflowClass = ExampleWorkflowWithFailedRunnableActivity.class;
+            aptWorkflow.runWorkflow(workflowClass, 13, workflowId);
 
             // then the workflow will eventually fail
             Awaitility.await().atMost(5, TimeUnit.SECONDS).until(
-                    () -> aptWorkflow.getWorkflowStatus(workflowId).hasFailed()
+                    () -> aptWorkflow.getLatestRun(workflowId).hasFailed()
             );
 
             // and the event sequence is correct
-            List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getWorkflowEvents(workflowId);
+            List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getLatestRun(workflowId, workflowClass).getFunctionEvents();
             assertEquals(7, events.size()); // 3 workflow + 2 for successful activity + 2 for failed activity
             assertTrue(eventMatches(events.get(0), StepFunctionType.WORKFLOW, StepFunctionEventStatus.SCHEDULED));
             assertTrue(eventMatches(events.get(1), StepFunctionType.WORKFLOW, StepFunctionEventStatus.STARTED));
@@ -349,15 +363,16 @@ public class AcceptanceTest {
         public void testWorkflowWithFailedSupplierActivity() throws Exception {
             // given a workflow that will fail
             String workflowId = "testWorkflowWithFailedSupplierActivity";
-            aptWorkflow.runWorkflow(ExampleWorkflowWithFailedSupplierActivity.class, 13, workflowId);
+            Class<? extends RunnableWorkflow<Integer, String>> workflowClass = ExampleWorkflowWithFailedSupplierActivity.class;
+            aptWorkflow.runWorkflow(workflowClass, 13, workflowId);
 
             // then the workflow will eventually fail
             Awaitility.await().atMost(5, TimeUnit.SECONDS).until(
-                    () -> aptWorkflow.getWorkflowStatus(workflowId).hasFailed()
+                    () -> aptWorkflow.getLatestRun(workflowId).hasFailed()
             );
 
             // and the event sequence is correct
-            List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getWorkflowEvents(workflowId);
+            List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getLatestRun(workflowId, workflowClass).getFunctionEvents();
             assertEquals(5, events.size()); // 3 workflow + 2 for failed activity
             assertTrue(eventMatches(events.get(0), StepFunctionType.WORKFLOW, StepFunctionEventStatus.SCHEDULED));
             assertTrue(eventMatches(events.get(1), StepFunctionType.WORKFLOW, StepFunctionEventStatus.STARTED));

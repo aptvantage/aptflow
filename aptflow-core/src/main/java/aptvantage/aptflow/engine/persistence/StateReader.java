@@ -86,7 +86,7 @@ public class StateReader {
     ActivityFunction<I, O, A> getActivityFunction(String workflowRunId, String name) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
-                                SELECT 
+                                SELECT
                                     workflow_run_id,
                                     name,
                                     started_event_id,
@@ -119,14 +119,14 @@ public class StateReader {
     SleepFunction<I, O> getSleepFunction(String workflowRunId, String identifier) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
-                                SELECT 
+                                SELECT
                                     workflow_run_id,
                                     identifier,
                                     started_event_id,
                                     completed_event_id,
                                     duration_in_millis
                                 FROM sleep
-                                WHERE 
+                                WHERE
                                     workflow_run_id = :workflowRunId
                                     AND identifier = :identifier
                                 """)
@@ -152,13 +152,13 @@ public class StateReader {
     ConditionFunction<I, O> getConditionFunction(String workflowRunId, String identifier) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
-                                SELECT 
+                                SELECT
                                     workflow_run_id,
                                     identifier,
                                     waiting_event_id,
                                     satisfied_event_id
                                 FROM "condition"
-                                WHERE 
+                                WHERE
                                     workflow_run_id = :workflowRunId
                                     AND identifier = :identifier
                                 """)
@@ -183,14 +183,14 @@ public class StateReader {
     SignalFunction<I, O, S> getSignalFunction(String workflowRunId, String name) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
-                                SELECT 
+                                SELECT
                                     workflow_run_id,
                                     name,
                                     waiting_event_id,
                                     received_event_id,
                                     value
                                 FROM signal
-                                WHERE 
+                                WHERE
                                     workflow_run_id = :workflowRunId
                                     AND name = :name
                                 """)
@@ -334,7 +334,7 @@ public class StateReader {
     }
 
     public <I extends Serializable, O extends Serializable>
-    Workflow<I, O> getWorkflow(String id) {
+    Workflow<I, O> getWorkflow(String id, Class<? extends RunnableWorkflow<I, O>> workflowClass) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
                                 SELECT id, class_name, input
@@ -366,7 +366,7 @@ public class StateReader {
     List<WorkflowRun<I, O>> getRunsForWorkflow(String workflowId) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
-                                SELECT 
+                                SELECT
                                     id,
                                     workflow_id,
                                     scheduled_event_id,
@@ -376,7 +376,7 @@ public class StateReader {
                                     archived
                                 FROM
                                     workflow_run
-                                WHERE 
+                                WHERE
                                     workflow_id = :workflowId
                                 """)
                         .bind("workflowId", workflowId)
@@ -417,7 +417,7 @@ public class StateReader {
     WorkflowRun<I, O> getWorkflowRun(String id) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
-                                SELECT 
+                                SELECT
                                     id,
                                     workflow_id,
                                     scheduled_event_id,
@@ -427,8 +427,8 @@ public class StateReader {
                                     archived
                                 FROM
                                     workflow_run
-                                WHERE 
-                                    id = :id 
+                                WHERE
+                                    id = :id
                                 """)
                         .bind("id", id)
                         .map((rs, ctx) ->

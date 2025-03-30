@@ -1,8 +1,8 @@
 package aptvantage.aptflow.api;
 
-import aptvantage.aptflow.AptWorkflow;
 import aptvantage.aptflow.engine.*;
 import aptvantage.aptflow.engine.persistence.StateReader;
+import aptvantage.aptflow.engine.persistence.StateWriter;
 import aptvantage.aptflow.model.ActivityFunction;
 import aptvantage.aptflow.model.ConditionFunction;
 import aptvantage.aptflow.model.SignalFunction;
@@ -22,14 +22,24 @@ public class WorkflowFunctions {
     private static WorkflowFunctions SINGLETON = null;
     private final WorkflowExecutor workflowExecutor;
     private final StateReader stateReader;
+    private final StateWriter stateWriter;
 
-    public WorkflowFunctions(WorkflowExecutor workflowExecutor, StateReader stateReader) {
+    public WorkflowFunctions(
+            WorkflowExecutor workflowExecutor,
+            StateReader stateReader,
+            StateWriter stateWriter
+    ) {
         this.workflowExecutor = workflowExecutor;
         this.stateReader = stateReader;
+        this.stateWriter = stateWriter;
     }
 
-    public static void initialize(WorkflowExecutor workflowExecutor, StateReader stateReader) {
-        SINGLETON = new WorkflowFunctions(workflowExecutor, stateReader);
+    public static void initialize(
+            WorkflowExecutor workflowExecutor,
+            StateReader stateReader,
+            StateWriter stateWriter
+    ) {
+        SINGLETON = new WorkflowFunctions(workflowExecutor, stateReader, stateWriter);
     }
 
     public static void sleep(String identifier, Duration duration) {
@@ -73,7 +83,7 @@ public class WorkflowFunctions {
         logger.atInfo().log("evaluating condition [%s]", conditionKey);
         if (conditionSupplier.get()) {
             logger.atInfo().log("satisfied condition [%s]", conditionKey);
-            AptWorkflow.repository.conditionSatisfied(workflowRunId, conditionIdentifier);
+            stateWriter.conditionSatisfied(workflowRunId, conditionIdentifier);
             return;
         }
         logger.atInfo().log("Scheduling reevaluation of condition [%s] of workflow [%s] in [%s]", conditionIdentifier, workflowRunId, evaluationInterval);
@@ -87,7 +97,7 @@ public class WorkflowFunctions {
     ConditionFunction<I, O> initializeCondition(String workflowRunId, String conditionIdentifier) {
         ConditionFunction<I, O> conditionFunction = stateReader.getConditionFunction(workflowRunId, conditionIdentifier);
         if (conditionFunction == null) {
-            AptWorkflow.repository.newConditionWaiting(workflowRunId, conditionIdentifier);
+            stateWriter.newConditionWaiting(workflowRunId, conditionIdentifier);
             conditionFunction = stateReader.getConditionFunction(workflowRunId, conditionIdentifier);
         }
         return conditionFunction;
@@ -98,7 +108,7 @@ public class WorkflowFunctions {
         logger.atFine().log("processing workflow sleep [%s::%s]".formatted(workflowRunId, identifier));
         SleepFunction<? extends Serializable, ? extends Serializable> sleepFunction = stateReader.getSleepFunction(workflowRunId, identifier);
         if (sleepFunction == null) {
-            AptWorkflow.repository.newSleepStarted(workflowRunId, identifier, duration);
+            stateWriter.newSleepStarted(workflowRunId, identifier, duration);
             logger.atInfo().log("scheduling wake-up-call for sleep [%s::%s] in [%s]", workflowRunId, identifier, duration);
             this.workflowExecutor.scheduleWakeUp(workflowRunId, identifier, Instant.now().plus(duration));
             throw new WorkflowSleepingException(identifier, duration);
@@ -128,7 +138,7 @@ public class WorkflowFunctions {
         SignalFunction<I, O, S> signalFunction = stateReader.getSignalFunction(workflowRunId, signalName);
         if (signalFunction == null) {
             logger.atInfo().log("waiting for signal [%s::%s]", workflowRunId, signalName);
-            AptWorkflow.repository.newSignalWaiting(workflowRunId, signalName);
+            stateWriter.newSignalWaiting(workflowRunId, signalName);
             throw new AwaitingSignalException(signalName);
         }
         if (signalFunction.isReceived()) {
@@ -188,7 +198,7 @@ public class WorkflowFunctions {
         logger.atFine().log("processing workflow activity [%s::%s]", workflowRunId, activityName);
         if (activityFunction == null) {
             logger.atInfo().log("starting activity [%s::%s]", workflowRunId, activityName);
-            AptWorkflow.repository.newActivityStarted(workflowRunId, activityName);
+            stateWriter.newActivityStarted(workflowRunId, activityName);
             activityFunction = stateReader.getActivityFunction(workflowRunId, activityName);
         }
         return activityFunction;
@@ -205,12 +215,12 @@ public class WorkflowFunctions {
 
     private <I extends Serializable, O extends Serializable, A extends Serializable>
     void completeActivity(ActivityFunction<I, O, A> activity, A output) {
-        AptWorkflow.repository.completeActivity(activity.getWorkflowRun().getId(), activity.getName(), output);
+        stateWriter.completeActivity(activity.getWorkflowRun().getId(), activity.getName(), output);
         logger.atInfo().log("completing activity [%s]", activity.getKey());
     }
 
     private <I extends Serializable, O extends Serializable, A extends Serializable> void failActivity(ActivityFunction<I, O, A> activity, Exception e) {
-        AptWorkflow.repository.failActivity(activity.getWorkflowRun().getId(), activity.getName());
+        stateWriter.failActivity(activity.getWorkflowRun().getId(), activity.getName());
         logger.atSevere().withCause(e).log("activity [%s] failed", activity.getKey());
     }
 
