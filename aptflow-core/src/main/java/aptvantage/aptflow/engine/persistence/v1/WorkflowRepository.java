@@ -188,48 +188,6 @@ public class WorkflowRepository {
                         .mapTo(Integer.class).one()) == 1;
     }
 
-    public Signal getSignal(String workflowRunId, String name) {
-        return jdbi.withHandle(handle ->
-                handle.createQuery("""
-                                SELECT
-                                 s.workflow_run_id as s_workflow_run_id,
-                                 s.name as s_name,
-                                 s.value as s_value,
-                                 waiting.category as waiting_category,
-                                 waiting.status as waiting_status,
-                                 waiting.timestamp as waiting_timestamp,
-                                 received.category as received_category,
-                                 received.status as received_status,
-                                 received.timestamp as received_timestamp
-                                FROM signal s
-                                  LEFT JOIN event waiting on s.waiting_event_id = waiting.id
-                                  LEFT JOIN event received on s.received_event_id = received.id
-                                WHERE s.workflow_run_id = :workflowRunId and s.name = :name
-                                """)
-                        .bind("workflowRunId", workflowRunId)
-                        .bind("name", name)
-                        .map((rs, ctx) ->
-                                new Signal(
-                                        rs.getString("s_workflow_run_id"),
-                                        rs.getString("s_name"),
-                                        serializableColumnMapper.map(rs, "s_value", ctx),
-                                        new Event(
-                                                eventCategoryColumnMapper.map(rs, "waiting_category", ctx),
-                                                eventStatusColumnMapper.map(rs, "waiting_status", ctx),
-                                                rs.getString("s_name"),
-                                                instantColumnMapper.map(rs, "waiting_timestamp", ctx)
-                                        ),
-                                        new Event(
-                                                eventCategoryColumnMapper.map(rs, "received_category", ctx),
-                                                eventStatusColumnMapper.map(rs, "received_status", ctx),
-                                                rs.getString("s_name"),
-                                                instantColumnMapper.map(rs, "received_timestamp", ctx)
-                                        )
-                                ))
-                        .findOne()
-                        .orElse(null));
-    }
-
     public String getActiveWorkflowRunId(String workflowId) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""

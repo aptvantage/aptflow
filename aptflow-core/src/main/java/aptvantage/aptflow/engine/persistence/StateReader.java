@@ -172,6 +172,39 @@ public class StateReader {
         );
     }
 
+    public <I extends Serializable, O extends Serializable, S extends Serializable>
+    SignalFunction<I, O, S> getSignalFunction(String workflowRunId, String name) {
+        return jdbi.withHandle(handle ->
+                handle.createQuery("""
+                                SELECT 
+                                    workflow_run_id,
+                                    name,
+                                    waiting_event_id,
+                                    received_event_id,
+                                    value
+                                FROM signal
+                                WHERE 
+                                    workflow_run_id = :workflowRunId
+                                    AND name = :name
+                                """)
+                        .bind("workflowRunId", workflowRunId)
+                        .bind("name", name)
+                        .map((rs, ctx) ->
+                                new SignalFunction<I, O, S>(
+                                        rs.getString("workflow_run_id"),
+                                        rs.getString("name"),
+                                        rs.getString("waiting_event_id"),
+                                        rs.getString("received_event_id"),
+                                        (S) serializableColumnMapper.map(rs, "value", ctx),
+                                        this
+                                )
+                        )
+                        .findOne()
+                        .orElse(null)
+
+        );
+    }
+
     public <I extends Serializable, O extends Serializable>
     List<StepFunction<I, O>> getFunctionsForWorkflowRun(String workflowRunId) {
         return jdbi.withHandle(handle ->

@@ -4,9 +4,9 @@ import aptvantage.aptflow.AptWorkflow;
 import aptvantage.aptflow.engine.*;
 import aptvantage.aptflow.engine.persistence.StateReader;
 import aptvantage.aptflow.model.ConditionFunction;
+import aptvantage.aptflow.model.SignalFunction;
 import aptvantage.aptflow.model.SleepFunction;
 import aptvantage.aptflow.model.v1.Activity;
-import aptvantage.aptflow.model.v1.Signal;
 import com.google.common.flogger.FluentLogger;
 
 import java.io.Serializable;
@@ -57,7 +57,7 @@ public class WorkflowFunctions {
         SINGLETON._awaitCondition(conditionIdentifier, condition, evaluationInternal);
     }
 
-    public static <T> T awaitSignal(String signalName, Class<T> returnType) {
+    public static <S extends Serializable> S awaitSignal(String signalName, Class<S> returnType) {
         return SINGLETON._awaitSignal(signalName, returnType);
     }
 
@@ -121,17 +121,18 @@ public class WorkflowFunctions {
         return workflowExecutor.runAsync(runnable);
     }
 
-    private <T> T _awaitSignal(String signalName, Class<T> returnType) {
+    private <I extends Serializable, O extends Serializable, S extends Serializable>
+    S _awaitSignal(String signalName, Class<S> returnType) {
         String workflowRunId = workflowExecutor.getExecutionContext().workflowRunId();
         logger.atFine().log("processing signal [%s::%s]", workflowRunId, signalName);
-        Signal signal = AptWorkflow.repository.getSignal(workflowRunId, signalName);
-        if (signal == null) {
+        SignalFunction<I, O, S> signalFunction = stateReader.getSignalFunction(workflowRunId, signalName);
+        if (signalFunction == null) {
             logger.atInfo().log("waiting for signal [%s::%s]", workflowRunId, signalName);
             AptWorkflow.repository.newSignalWaiting(workflowRunId, signalName);
             throw new AwaitingSignalException(signalName);
         }
-        if (signal.isReceived()) {
-            return (T) signal.value();
+        if (signalFunction.isReceived()) {
+            return signalFunction.getValue();
         }
 
         // If a workflow woke from sleep, but is still waiting for a signal

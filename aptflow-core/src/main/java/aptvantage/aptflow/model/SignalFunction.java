@@ -58,4 +58,8 @@ public class SignalFunction<I extends Serializable, O extends Serializable, S ex
     public S getValue() {
         return value;
     }
+
+    public boolean isReceived() {
+        return receivedEventId != null;
+    }
 }
