@@ -4,7 +4,7 @@ import aptvantage.aptflow.api.RunnableWorkflow;
 import aptvantage.aptflow.api.WorkflowFunctions;
 import aptvantage.aptflow.engine.WorkflowExecutor;
 import aptvantage.aptflow.engine.persistence.StateReader;
-import aptvantage.aptflow.engine.persistence.v1.WorkflowRepository;
+import aptvantage.aptflow.engine.persistence.StateWriter;
 import aptvantage.aptflow.model.StepFunctionEvent;
 import aptvantage.aptflow.model.WorkflowRun;
 import com.zaxxer.hikari.HikariConfig;
@@ -21,7 +21,7 @@ import java.util.Set;
 
 public class AptWorkflow {
 
-    public static WorkflowRepository repository;
+    public static StateWriter repository;
     private final WorkflowExecutor workflowExecutor;
     private final AptWorkflowBuilder builder;
     private final StateReader stateReader;
@@ -41,8 +41,8 @@ public class AptWorkflow {
     }
 
     public <T extends Serializable> void signalWorkflow(String workflowId, String signalName, T signalValue) {
-        String workflowRunId = repository.getActiveWorkflowRunId(workflowId);
-        this.workflowExecutor.signalWorkflowRun(workflowRunId, signalName, signalValue);
+        WorkflowRun<Serializable, Serializable> activeRun = stateReader.getActiveRunForWorkflowId(workflowId, null);
+        this.workflowExecutor.signalWorkflowRun(activeRun.getId(), signalName, signalValue);
     }
 
     public <I extends Serializable, O extends Serializable> void runWorkflow(
@@ -133,7 +133,7 @@ public class AptWorkflow {
             Jdbi jdbi = Jdbi.create(this.dataSource);
 
             StateReader stateReader = new StateReader(jdbi);
-            AptWorkflow.repository = new WorkflowRepository(jdbi, stateReader);
+            AptWorkflow.repository = new StateWriter(jdbi, stateReader);
 
             WorkflowExecutor executor = new WorkflowExecutor(
                     this.dataSource,

@@ -1,7 +1,6 @@
-package aptvantage.aptflow.engine.persistence.v1;
+package aptvantage.aptflow.engine.persistence;
 
 import aptvantage.aptflow.api.RunnableWorkflow;
-import aptvantage.aptflow.engine.persistence.StateReader;
 import aptvantage.aptflow.model.StepFunctionEventStatus;
 import aptvantage.aptflow.model.StepFunctionType;
 import aptvantage.aptflow.model.WorkflowRun;
@@ -17,12 +16,12 @@ import java.time.Instant;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
-public class WorkflowRepository {
+public class StateWriter {
 
     private final Jdbi jdbi;
     private final StateReader stateReader;
 
-    public WorkflowRepository(
+    public StateWriter(
             Jdbi jdbi,
             StateReader stateReader
     ) {
@@ -130,35 +129,6 @@ public class WorkflowRepository {
         });
     }
 
-    public boolean isSignalReceived(String workflowRunId, String name) {
-        return jdbi.withHandle(handle ->
-                handle.createQuery("""
-                                SELECT count(workflow_run_id)
-                                FROM signal
-                                WHERE workflow_run_id = :workflowRunId
-                                    AND name = :name
-                                    AND received_event_id IS NOT NULL
-                                """)
-                        .bind("workflowRunId", workflowRunId)
-                        .bind("name", name)
-                        .mapTo(Integer.class).one()) == 1;
-    }
-
-    public String getActiveWorkflowRunId(String workflowId) {
-        return jdbi.withHandle(handle ->
-                handle.createQuery("""
-                                SELECT id
-                                FROM workflow_run
-                                WHERE workflow_id = :workflowId
-                                    AND archived IS NULL
-                                """)
-                        .bind("workflowId", workflowId)
-                        .map((rs, ctx) ->
-                                rs.getString("id")
-                        ).one()
-        );
-    }
-
     public String scheduleNewRunForExistingWorkflow(String workflowId) {
         WorkflowRun workflowRun = stateReader.getActiveRunForWorkflowId(workflowId, null);
 
@@ -182,44 +152,8 @@ public class WorkflowRepository {
 
     }
 
-    private <I extends Serializable, O extends Serializable> Class<? extends RunnableWorkflow<I, O>> workflowClassFromClassName(String className) {
-        try {
-            return (Class<? extends RunnableWorkflow<I, O>>) Class.forName(className);
-        } catch (ClassNotFoundException e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    private <I extends Serializable, O extends Serializable> String scheduleWorkflowRun(
-            String workflowId,
-            Class<? extends RunnableWorkflow<I, O>> workflowClass,
-            Handle handle) {
-
-        String workflowRunId = UUID.randomUUID().toString();
-
-        handle.createUpdate("""
-                        INSERT INTO workflow_run (id, workflow_id)
-                        VALUES (:id, :workflowId)
-                        """)
-                .bind("id", workflowRunId)
-                .bind("workflowId", workflowId)
-                .execute();
-
-        String eventId = newEvent(handle, workflowRunId, StepFunctionType.WORKFLOW, StepFunctionEventStatus.SCHEDULED);
-
-        handle.createUpdate("""
-                        UPDATE workflow_run
-                        SET scheduled_event_id = :eventId
-                        WHERE id = :workflowRunId""")
-                .bind("eventId", eventId)
-                .bind("workflowRunId", workflowRunId)
-                .execute();
-
-        return workflowRunId;
-
-    }
-
-    public <I extends Serializable, O extends Serializable> String scheduleRunForNewWorkflow(
+    public <I extends Serializable, O extends Serializable>
+    String scheduleRunForNewWorkflow(
             String workflowId,
             Class<? extends RunnableWorkflow<I, O>> workflowClass,
             I input) {
@@ -255,16 +189,6 @@ public class WorkflowRepository {
                     .bind("workflowRunId", workflowRunId)
                     .execute();
         });
-    }
-
-    private byte[] serialize(Object obj) {
-        ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
-        try (ObjectOutputStream objectStream = new ObjectOutputStream(byteStream)) {
-            objectStream.writeObject(obj);
-        } catch (IOException e) {
-            // Handle exception
-        }
-        return byteStream.toByteArray();
     }
 
     public void workflowRunCompleted(String workflowRunId, Object output) {
@@ -360,6 +284,55 @@ public class WorkflowRepository {
                     .execute();
 
         });
+    }
+
+    private byte[] serialize(Object obj) {
+        ByteArrayOutputStream byteStream = new ByteArrayOutputStream();
+        try (ObjectOutputStream objectStream = new ObjectOutputStream(byteStream)) {
+            objectStream.writeObject(obj);
+        } catch (IOException e) {
+            // Handle exception
+        }
+        return byteStream.toByteArray();
+    }
+
+    private <I extends Serializable, O extends Serializable>
+    Class<? extends RunnableWorkflow<I, O>> workflowClassFromClassName(String className) {
+        try {
+            return (Class<? extends RunnableWorkflow<I, O>>) Class.forName(className);
+        } catch (ClassNotFoundException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    private <I extends Serializable, O extends Serializable>
+    String scheduleWorkflowRun(
+            String workflowId,
+            Class<? extends RunnableWorkflow<I, O>> workflowClass,
+            Handle handle) {
+
+        String workflowRunId = UUID.randomUUID().toString();
+
+        handle.createUpdate("""
+                        INSERT INTO workflow_run (id, workflow_id)
+                        VALUES (:id, :workflowId)
+                        """)
+                .bind("id", workflowRunId)
+                .bind("workflowId", workflowId)
+                .execute();
+
+        String eventId = newEvent(handle, workflowRunId, StepFunctionType.WORKFLOW, StepFunctionEventStatus.SCHEDULED);
+
+        handle.createUpdate("""
+                        UPDATE workflow_run
+                        SET scheduled_event_id = :eventId
+                        WHERE id = :workflowRunId""")
+                .bind("eventId", eventId)
+                .bind("workflowRunId", workflowRunId)
+                .execute();
+
+        return workflowRunId;
+
     }
 
 }

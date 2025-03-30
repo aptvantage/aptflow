@@ -1,29 +1,29 @@
 package aptvantage.aptflow.engine;
 
-import aptvantage.aptflow.engine.persistence.v1.WorkflowRepository;
+import aptvantage.aptflow.engine.persistence.StateWriter;
 import com.github.kagkarlsson.scheduler.task.ExecutionContext;
 import com.github.kagkarlsson.scheduler.task.TaskInstance;
 import com.github.kagkarlsson.scheduler.task.helper.OneTimeTask;
 
 public class StartWorkflowTask extends OneTimeTask<RunWorkflowTaskInput> {
 
-    private final WorkflowRepository workflowRepository;
+    private final StateWriter stateWriter;
     private final WorkflowExecutor workflowExecutor;
 
-    public StartWorkflowTask(WorkflowRepository workflowRepository,
+    public StartWorkflowTask(StateWriter stateWriter,
                              WorkflowExecutor workflowExecutor) {
         super(StartWorkflowTask.class.getSimpleName(), RunWorkflowTaskInput.class);
         //TODO -- need some kind of global error handler for failed tasks
         // they should truly be an edge case (eg, exception handling had an unhandled exception,
         // but we still shouldn't die in silence
-        this.workflowRepository = workflowRepository;
+        this.stateWriter = stateWriter;
         this.workflowExecutor = workflowExecutor;
     }
 
     @Override
     public void executeOnce(TaskInstance<RunWorkflowTaskInput> taskInstance, ExecutionContext executionContext) {
         RunWorkflowTaskInput data = taskInstance.getData();
-        workflowRepository.workflowRunStarted(data.workflowRunId());
+        stateWriter.workflowRunStarted(data.workflowRunId());
         workflowExecutor.executeWorkflow(data.workflowRunId());
     }
 }
