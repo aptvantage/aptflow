@@ -59,10 +59,10 @@ public class WorkflowFunctions {
     }
 
     private void _awaitCondition(String conditionIdentifier, Supplier<Boolean> conditionSupplier, Duration evaluationInterval) {
-        String workflowId = workflowExecutor.getExecutionContext().workflowId();
-        String conditionKey = "condition::%s::%s".formatted(workflowId, conditionIdentifier);
+        String workflowRunId = workflowExecutor.getExecutionContext().workflowRunId();
+        String conditionKey = "condition::%s::%s".formatted(workflowRunId, conditionIdentifier);
         logger.atFine().log("processing condition [%s]", conditionKey);
-        Condition condition = initializeCondition(workflowId, conditionIdentifier);
+        Condition condition = initializeCondition(workflowRunId, conditionIdentifier);
         if (condition.isSatisfied()) {
             logger.atInfo().log("skipping previously satisfied condition [%s]", conditionKey);
             return;
@@ -70,37 +70,37 @@ public class WorkflowFunctions {
         logger.atInfo().log("evaluating condition [%s]", conditionKey);
         if (conditionSupplier.get()) {
             logger.atInfo().log("satisfied condition [%s]", conditionKey);
-            AptWorkflow.repository.conditionSatisfied(workflowId, conditionIdentifier);
+            AptWorkflow.repository.conditionSatisfied(workflowRunId, conditionIdentifier);
             return;
         }
-        logger.atInfo().log("Scheduling reevaluation of condition [%s] of workflow [%s] in [%s]", conditionIdentifier, workflowId, evaluationInterval);
-        this.workflowExecutor.scheduleReevaluation(workflowId, conditionIdentifier, Instant.now().plus(evaluationInterval));
+        logger.atInfo().log("Scheduling reevaluation of condition [%s] of workflow [%s] in [%s]", conditionIdentifier, workflowRunId, evaluationInterval);
+        this.workflowExecutor.scheduleReevaluation(workflowRunId, conditionIdentifier, Instant.now().plus(evaluationInterval));
 
         throw new ConditionNotSatisfiedException(conditionIdentifier);
 
     }
 
-    private Condition initializeCondition(String workflowId, String conditionIdentifier) {
-        Condition condition = AptWorkflow.repository.getCondition(workflowId, conditionIdentifier);
+    private Condition initializeCondition(String workflowRunId, String conditionIdentifier) {
+        Condition condition = AptWorkflow.repository.getCondition(workflowRunId, conditionIdentifier);
         if (condition == null) {
-            AptWorkflow.repository.newConditionWaiting(workflowId, conditionIdentifier);
-            condition = AptWorkflow.repository.getCondition(workflowId, conditionIdentifier);
+            AptWorkflow.repository.newConditionWaiting(workflowRunId, conditionIdentifier);
+            condition = AptWorkflow.repository.getCondition(workflowRunId, conditionIdentifier);
         }
         return condition;
     }
 
     private void _sleep(String identifier, Duration duration) {
-        String workflowId = workflowExecutor.getExecutionContext().workflowId();
-        logger.atFine().log("processing workflow sleep [%s::%s]".formatted(workflowId, identifier));
-        Sleep sleep = AptWorkflow.repository.getSleep(workflowId, identifier);
+        String workflowRunId = workflowExecutor.getExecutionContext().workflowRunId();
+        logger.atFine().log("processing workflow sleep [%s::%s]".formatted(workflowRunId, identifier));
+        Sleep sleep = AptWorkflow.repository.getSleep(workflowRunId, identifier);
         if (sleep == null) {
-            AptWorkflow.repository.newSleepStarted(workflowId, identifier, duration);
-            logger.atInfo().log("scheduling wake-up-call for sleep [%s::%s] in [%s]", workflowId, identifier, duration);
-            this.workflowExecutor.scheduleWakeUp(workflowId, identifier, Instant.now().plus(duration));
+            AptWorkflow.repository.newSleepStarted(workflowRunId, identifier, duration);
+            logger.atInfo().log("scheduling wake-up-call for sleep [%s::%s] in [%s]", workflowRunId, identifier, duration);
+            this.workflowExecutor.scheduleWakeUp(workflowRunId, identifier, Instant.now().plus(duration));
             throw new WorkflowSleepingException(identifier, duration);
         }
         if (sleep.isCompleted()) {
-            logger.atInfo().log("workflow has completed sleep [%s::%s]".formatted(workflowId, identifier));
+            logger.atInfo().log("workflow has completed sleep [%s::%s]".formatted(workflowRunId, identifier));
             return;
         }
 
@@ -118,12 +118,12 @@ public class WorkflowFunctions {
     }
 
     private <T> T _awaitSignal(String signalName, Class<T> returnType) {
-        String workflowId = workflowExecutor.getExecutionContext().workflowId();
-        logger.atFine().log("processing signal [%s::%s]", workflowId, signalName);
-        Signal signal = AptWorkflow.repository.getSignal(workflowId, signalName);
+        String workflowRunId = workflowExecutor.getExecutionContext().workflowRunId();
+        logger.atFine().log("processing signal [%s::%s]", workflowRunId, signalName);
+        Signal signal = AptWorkflow.repository.getSignal(workflowRunId, signalName);
         if (signal == null) {
-            logger.atInfo().log("waiting for signal [%s::%s]", workflowId, signalName);
-            AptWorkflow.repository.newSignalWaiting(workflowId, signalName);
+            logger.atInfo().log("waiting for signal [%s::%s]", workflowRunId, signalName);
+            AptWorkflow.repository.newSignalWaiting(workflowRunId, signalName);
             throw new AwaitingSignalException(signalName);
         }
         if (signal.isReceived()) {
@@ -131,13 +131,13 @@ public class WorkflowFunctions {
         }
 
         // If a workflow woke from sleep, but is still waiting for a signal
-        logger.atInfo().log("still waiting for signal [%s::%s]", workflowId, signalName);
+        logger.atInfo().log("still waiting for signal [%s::%s]", workflowRunId, signalName);
         throw new AwaitingSignalException(signalName);
     }
 
     <R extends Serializable> R _activity(String activityName, Supplier<R> supplier) {
-        String workflowId = workflowExecutor.getExecutionContext().workflowId();
-        Activity activity = initActivity(workflowId, activityName);
+        String workflowRunId = workflowExecutor.getExecutionContext().workflowRunId();
+        Activity activity = initActivity(workflowRunId, activityName);
 
         if (activityHasAlreadyExecuted(activity)) {
             return activityOutput(activity);
@@ -155,8 +155,8 @@ public class WorkflowFunctions {
     }
 
     void _activity(String activityName, Runnable runnable) {
-        String workflowId = workflowExecutor.getExecutionContext().workflowId();
-        Activity activity = initActivity(workflowId, activityName);
+        String workflowRunId = workflowExecutor.getExecutionContext().workflowRunId();
+        Activity activity = initActivity(workflowRunId, activityName);
         if (activityHasAlreadyExecuted(activity)) {
             return;
         }
@@ -180,13 +180,13 @@ public class WorkflowFunctions {
         return (R) AptWorkflow.repository.getActivity(activity.workflowRunId(), activity.name()).output();
     }
 
-    private Activity initActivity(String workflowId, String activityName) {
-        Activity activity = AptWorkflow.repository.getActivity(workflowId, activityName);
-        logger.atFine().log("processing workflow activity [%s::%s]", workflowId, activityName);
+    private Activity initActivity(String workflowRunId, String activityName) {
+        Activity activity = AptWorkflow.repository.getActivity(workflowRunId, activityName);
+        logger.atFine().log("processing workflow activity [%s::%s]", workflowRunId, activityName);
         if (activity == null) {
-            logger.atInfo().log("starting activity [%s::%s]", workflowId, activityName);
-            AptWorkflow.repository.newActivityStarted(workflowId, activityName);
-            activity = AptWorkflow.repository.getActivity(workflowId, activityName);
+            logger.atInfo().log("starting activity [%s::%s]", workflowRunId, activityName);
+            AptWorkflow.repository.newActivityStarted(workflowRunId, activityName);
+            activity = AptWorkflow.repository.getActivity(workflowRunId, activityName);
         }
         return activity;
     }

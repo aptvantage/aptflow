@@ -86,26 +86,26 @@ public class WorkflowExecutor {
         return ctx;
     }
 
-    void executeWorkflow(String workflowId) {
-        WorkflowRun<Serializable, Serializable> workflowRun = this.workflowRepository.getWorkflowRun(workflowId);
+    void executeWorkflow(String workflowRunId) {
+        WorkflowRun<Serializable, Serializable> workflowRun = this.workflowRepository.getWorkflowRun(workflowRunId);
         try {
-            executionContext.set(new ExecutionContext(workflowId));
+            executionContext.set(new ExecutionContext(workflowRunId));
             RunnableWorkflow instance = instantiate(workflowRun.workflow().className());
             Serializable output = instance.execute(workflowRun.workflow().input());
-            this.workflowRepository.workflowRunCompleted(workflowId, output);
-            logger.atInfo().log("Workflow [%s] is complete", workflowId);
+            this.workflowRepository.workflowRunCompleted(workflowRunId, output);
+            logger.atInfo().log("Workflow [%s] is complete", workflowRunId);
         } catch (AwaitingSignalException e) {
-            logger.atInfo().log("Pausing execution of workflow [%s] to wait for signal [%s]", workflowId, e.getSignal());
+            logger.atInfo().log("Pausing execution of workflow [%s] to wait for signal [%s]", workflowRunId, e.getSignal());
         } catch (WorkflowStillSleepingException e) {
-            logger.atInfo().log("Workflow [%s] has been sleeping [%s] for [%s] out of [%s]", workflowId, e.getIdentifier(), e.getElapsedSleepTime(), e.getNapTime());
+            logger.atInfo().log("Workflow [%s] has been sleeping [%s] for [%s] out of [%s]", workflowRunId, e.getIdentifier(), e.getElapsedSleepTime(), e.getNapTime());
         } catch (WorkflowSleepingException e) {
-            logger.atInfo().log("Pausing execution of workflow [%s] to sleep [%s] for [%s]", workflowId, e.getIdentifier(), e.getNapTime());
+            logger.atInfo().log("Pausing execution of workflow [%s] to sleep [%s] for [%s]", workflowRunId, e.getIdentifier(), e.getNapTime());
         } catch (ConditionNotSatisfiedException e) {
-            logger.atInfo().log("Pausing execution of workflow [%s] because condition [%s] is not satisfied", workflowId, e.getIdentifier());
+            logger.atInfo().log("Pausing execution of workflow [%s] because condition [%s] is not satisfied", workflowRunId, e.getIdentifier());
         } catch (Exception e) {
             // TODO -- save some kind of Failure data with the failed workflow
-            logger.atSevere().withCause(e).log("Workflow [%s] execution failed", workflowId);
-            this.workflowRepository.failWorkflowRun(workflowId);
+            logger.atSevere().withCause(e).log("Workflow [%s] execution failed", workflowRunId);
+            this.workflowRepository.failWorkflowRun(workflowRunId);
         } finally {
             executionContext.remove();
         }

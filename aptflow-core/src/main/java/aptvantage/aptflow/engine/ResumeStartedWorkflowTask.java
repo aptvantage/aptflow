@@ -20,6 +20,6 @@ public class ResumeStartedWorkflowTask extends OneTimeTask<RunWorkflowTaskInput>
     @Override
     public void executeOnce(TaskInstance<RunWorkflowTaskInput> taskInstance, ExecutionContext executionContext) {
         RunWorkflowTaskInput data = taskInstance.getData();
-        workflowExecutor.executeWorkflow(data.workflowId());
+        workflowExecutor.executeWorkflow(data.workflowRunId());
     }
 }
