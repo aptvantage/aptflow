@@ -365,7 +365,7 @@ public class StateReader {
                         .map((rs, ctx) ->
                                 new WorkflowRun<I, O>(
                                         rs.getString("id"),
-                                        rs.getString("workflow_run_id"),
+                                        rs.getString("workflow_id"),
                                         rs.getString("scheduled_event_id"),
                                         rs.getString("started_event_id"),
                                         rs.getString("completed_event_id"),

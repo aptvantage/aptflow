@@ -3,10 +3,10 @@ package aptvantage.aptflow.api;
 import aptvantage.aptflow.AptWorkflow;
 import aptvantage.aptflow.engine.*;
 import aptvantage.aptflow.engine.persistence.StateReader;
+import aptvantage.aptflow.model.ActivityFunction;
 import aptvantage.aptflow.model.ConditionFunction;
 import aptvantage.aptflow.model.SignalFunction;
 import aptvantage.aptflow.model.SleepFunction;
-import aptvantage.aptflow.model.v1.Activity;
 import com.google.common.flogger.FluentLogger;
 
 import java.io.Serializable;
@@ -140,38 +140,39 @@ public class WorkflowFunctions {
         throw new AwaitingSignalException(signalName);
     }
 
-    <R extends Serializable> R _activity(String activityName, Supplier<R> supplier) {
+    <A extends Serializable> A _activity(String activityName, Supplier<A> supplier) {
         String workflowRunId = workflowExecutor.getExecutionContext().workflowRunId();
-        Activity activity = initActivity(workflowRunId, activityName);
+        ActivityFunction<? extends Serializable, ? extends Serializable, A> activityFunction = initActivity(workflowRunId, activityName);
 
-        if (activityHasAlreadyExecuted(activity)) {
-            return activityOutput(activity);
+        if (activityHasAlreadyExecuted(activityFunction)) {
+            return activityFunction.getOutput();
         }
 
         try {
-            R output = supplier.get();
-            completeActivity(activity, output);
+            A output = supplier.get();
+            completeActivity(activityFunction, output);
             return output;
         } catch (Exception e) {
             rethrowIfWorkflowPausedException(e);
-            failActivity(activity, e);
-            throw new ActivityFailedException(activity, e);
+            failActivity(activityFunction, e);
+            throw new ActivityFailedException(activityFunction, e);
         }
     }
 
     void _activity(String activityName, Runnable runnable) {
         String workflowRunId = workflowExecutor.getExecutionContext().workflowRunId();
-        Activity activity = initActivity(workflowRunId, activityName);
-        if (activityHasAlreadyExecuted(activity)) {
+        ActivityFunction<? extends Serializable, ? extends Serializable, ? extends Serializable>
+                activityFunction = initActivity(workflowRunId, activityName);
+        if (activityHasAlreadyExecuted(activityFunction)) {
             return;
         }
         try {
             runnable.run();
-            completeActivity(activity, null);
+            completeActivity(activityFunction, null);
         } catch (Exception e) {
             rethrowIfWorkflowPausedException(e);
-            failActivity(activity, e);
-            throw new ActivityFailedException(activity, e);
+            failActivity(activityFunction, e);
+            throw new ActivityFailedException(activityFunction, e);
         }
     }
 
@@ -181,37 +182,36 @@ public class WorkflowFunctions {
         }
     }
 
-    private <R extends Serializable> R activityOutput(Activity activity) {
-        return (R) AptWorkflow.repository.getActivity(activity.workflowRunId(), activity.name()).output();
-    }
-
-    private Activity initActivity(String workflowRunId, String activityName) {
-        Activity activity = AptWorkflow.repository.getActivity(workflowRunId, activityName);
+    private <I extends Serializable, O extends Serializable, A extends Serializable>
+    ActivityFunction<I, O, A> initActivity(String workflowRunId, String activityName) {
+        ActivityFunction<I, O, A> activityFunction = stateReader.getActivityFunction(workflowRunId, activityName);
         logger.atFine().log("processing workflow activity [%s::%s]", workflowRunId, activityName);
-        if (activity == null) {
+        if (activityFunction == null) {
             logger.atInfo().log("starting activity [%s::%s]", workflowRunId, activityName);
             AptWorkflow.repository.newActivityStarted(workflowRunId, activityName);
-            activity = AptWorkflow.repository.getActivity(workflowRunId, activityName);
+            activityFunction = stateReader.getActivityFunction(workflowRunId, activityName);
         }
-        return activity;
+        return activityFunction;
     }
 
-    private boolean activityHasAlreadyExecuted(Activity activity) {
+    private <I extends Serializable, O extends Serializable, A extends Serializable>
+    boolean activityHasAlreadyExecuted(ActivityFunction<I, O, A> activity) {
         if (activity.isCompleted()) {
-            logger.atInfo().log("skipping previously executed activity [%s]", activity.key());
+            logger.atInfo().log("skipping previously executed activity [%s]", activity.getKey());
             return true;
         }
         return false;
     }
 
-    private <R extends Serializable> void completeActivity(Activity activity, R output) {
-        AptWorkflow.repository.completeActivity(activity.workflowRunId(), activity.name(), output);
-        logger.atInfo().log("completing activity [%s]", activity.key());
+    private <I extends Serializable, O extends Serializable, A extends Serializable>
+    void completeActivity(ActivityFunction<I, O, A> activity, A output) {
+        AptWorkflow.repository.completeActivity(activity.getWorkflowRun().getId(), activity.getName(), output);
+        logger.atInfo().log("completing activity [%s]", activity.getKey());
     }
 
-    private void failActivity(Activity activity, Exception e) {
-        AptWorkflow.repository.failActivity(activity);
-        logger.atSevere().withCause(e).log("activity [%s] failed", activity.key());
+    private <I extends Serializable, O extends Serializable, A extends Serializable> void failActivity(ActivityFunction<I, O, A> activity, Exception e) {
+        AptWorkflow.repository.failActivity(activity.getWorkflowRun().getId(), activity.getName());
+        logger.atSevere().withCause(e).log("activity [%s] failed", activity.getKey());
     }
 
 }

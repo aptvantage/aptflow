@@ -61,17 +61,17 @@ public class WorkflowRepository {
         });
     }
 
-    public void failActivity(Activity activity) {
+    public void failActivity(String workflowRunId, String name) {
         jdbi.useTransaction(handle -> {
-            String eventId = newEvent(handle, activity.workflowRunId(), EventCategory.ACTIVITY, EventStatus.FAILED);
+            String eventId = newEvent(handle, workflowRunId, EventCategory.ACTIVITY, EventStatus.FAILED);
 
             handle.createUpdate("""
                             UPDATE activity
                             SET completed_event_id = :eventId
                             WHERE workflow_run_id = :workflowRunId and name = :name
                             """)
-                    .bind("workflowRunId", activity.workflowRunId())
-                    .bind("name", activity.name())
+                    .bind("workflowRunId", workflowRunId)
+                    .bind("name", name)
                     .bind("eventId", eventId)
                     .execute();
 
@@ -95,48 +95,6 @@ public class WorkflowRepository {
                     .execute();
         });
 
-    }
-
-    public Activity getActivity(String workflowRunId, String name) {
-        return jdbi.withHandle(handle ->
-                handle.createQuery("""
-                                SELECT
-                                 a.workflow_run_id as a_workflow_run_id,
-                                 a.name as a_name,
-                                 a.output as a_output,
-                                 started.category as started_category,
-                                 started.status as started_status,
-                                 started.timestamp as started_timestamp,
-                                 completed.category as completed_category,
-                                 completed.status as completed_status,
-                                 completed.timestamp as completed_timestamp
-                                FROM activity a
-                                  LEFT JOIN event started on a.started_event_id = started.id
-                                  LEFT JOIN event completed on a.completed_event_id = completed.id
-                                WHERE a.workflow_run_id = :workflowRunId and a.name = :name
-                                """)
-                        .bind("workflowRunId", workflowRunId)
-                        .bind("name", name)
-                        .map((rs, ctx) ->
-                                new Activity(
-                                        rs.getString("a_workflow_run_id"),
-                                        rs.getString("a_name"),
-                                        serializableColumnMapper.map(rs, "a_output", ctx),
-                                        new Event(
-                                                eventCategoryColumnMapper.map(rs, "started_category", ctx),
-                                                eventStatusColumnMapper.map(rs, "started_status", ctx),
-                                                rs.getString("a_name"),
-                                                instantColumnMapper.map(rs, "started_timestamp", ctx)
-                                        ),
-                                        new Event(
-                                                eventCategoryColumnMapper.map(rs, "completed_category", ctx),
-                                                eventStatusColumnMapper.map(rs, "completed_status", ctx),
-                                                rs.getString("a_name"),
-                                                instantColumnMapper.map(rs, "completed_timestamp", ctx)
-                                        )
-                                ))
-                        .findOne()
-                        .orElse(null));
     }
 
     public void newSignalWaiting(String workflowRunId, String name) {

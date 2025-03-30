@@ -69,5 +69,4 @@ public class ActivityFunction<I extends Serializable, O extends Serializable, A 
     public String getKey() {
         return "%s::%s".formatted(workflowRunId, name);
     }
-
 }
