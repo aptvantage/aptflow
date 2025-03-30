@@ -131,9 +131,9 @@ public class AptWorkflow {
             //TODO -- null check this.dataSource
             runDatabaseMigration(this.dataSource);
             Jdbi jdbi = Jdbi.create(this.dataSource);
-            AptWorkflow.repository = new WorkflowRepository(jdbi);
 
             StateReader stateReader = new StateReader(jdbi);
+            AptWorkflow.repository = new WorkflowRepository(jdbi, stateReader);
 
             WorkflowExecutor executor = new WorkflowExecutor(
                     this.dataSource,
