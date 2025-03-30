@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import static aptvantage.aptflow.api.WorkflowFunctions.*;
 
-public class ExampleWorkflowWithNestedActivities implements RunnableWorkflow<Integer, String> {
+public class ExampleWorkflowWithNestedActivities implements RunnableWorkflow<String, Integer> {
 
     static final AtomicInteger execCount = new AtomicInteger(0);
 

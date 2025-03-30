@@ -1,7 +1,8 @@
 package aptvantage.aptflow.engine;
 
 import aptvantage.aptflow.api.RunnableWorkflow;
-import aptvantage.aptflow.engine.persistence.WorkflowRepository;
+import aptvantage.aptflow.engine.persistence.StateReader;
+import aptvantage.aptflow.engine.persistence.StateWriter;
 import aptvantage.aptflow.model.WorkflowRun;
 import com.github.kagkarlsson.scheduler.Scheduler;
 import com.github.kagkarlsson.scheduler.task.TaskInstance;
@@ -27,20 +28,27 @@ public class WorkflowExecutor {
     private final ThreadLocal<ExecutionContext> executionContext = new ThreadLocal<>();
 
     private final Scheduler scheduler;
-    private final WorkflowRepository workflowRepository;
+    private final StateWriter stateWriter;
 
     private final Set<Object> workflowDependencies;
 
     private final CompleteSleepTask completeSleepTask;
+    private final StateReader stateReader;
     private final ResumeStartedWorkflowTask resumeStartedWorkflowTask;
     private final SignalWorkflowTask signalWorkflowTask;
     private final StartWorkflowTask startWorkflowTask;
 
-    public WorkflowExecutor(DataSource dataSource, WorkflowRepository workflowRepository, Set<Object> workflowDependencies) {
-        this.completeSleepTask = new CompleteSleepTask(workflowRepository, this);
+    public WorkflowExecutor(
+            DataSource dataSource,
+            StateWriter stateWriter,
+            Set<Object> workflowDependencies,
+            StateReader stateReader
+    ) {
+        this.completeSleepTask = new CompleteSleepTask(stateWriter, this);
+        this.stateReader = stateReader;
         this.resumeStartedWorkflowTask = new ResumeStartedWorkflowTask(this);
-        this.startWorkflowTask = new StartWorkflowTask(workflowRepository, this);
-        this.signalWorkflowTask = new SignalWorkflowTask(workflowRepository, this);
+        this.startWorkflowTask = new StartWorkflowTask(stateWriter, this);
+        this.signalWorkflowTask = new SignalWorkflowTask(stateWriter, this);
         this.scheduler = Scheduler
                 .create(dataSource,
                         startWorkflowTask,
@@ -50,7 +58,7 @@ public class WorkflowExecutor {
                 .pollingInterval(Duration.ofSeconds(1))
                 .enableImmediateExecution()
                 .build();
-        this.workflowRepository = workflowRepository;
+        this.stateWriter = stateWriter;
         this.workflowDependencies = workflowDependencies;
     }
 
@@ -86,26 +94,27 @@ public class WorkflowExecutor {
         return ctx;
     }
 
-    void executeWorkflow(String workflowId) {
-        WorkflowRun<Serializable, Serializable> workflowRun = this.workflowRepository.getWorkflowRun(workflowId);
+    void executeWorkflow(String workflowRunId) {
+        WorkflowRun workflowRun = stateReader.getWorkflowRun(workflowRunId);
+
         try {
-            executionContext.set(new ExecutionContext(workflowId));
-            RunnableWorkflow instance = instantiate(workflowRun.workflow().className());
-            Serializable output = instance.execute(workflowRun.workflow().input());
-            this.workflowRepository.workflowRunCompleted(workflowId, output);
-            logger.atInfo().log("Workflow [%s] is complete", workflowId);
+            executionContext.set(new ExecutionContext(workflowRunId));
+            RunnableWorkflow instance = instantiate(workflowRun.getWorkflow().getClassName());
+            Serializable output = instance.execute(workflowRun.getWorkflow().getInput());
+            this.stateWriter.workflowRunCompleted(workflowRunId, output);
+            logger.atInfo().log("Workflow [%s] is complete", workflowRunId);
         } catch (AwaitingSignalException e) {
-            logger.atInfo().log("Pausing execution of workflow [%s] to wait for signal [%s]", workflowId, e.getSignal());
+            logger.atInfo().log("Pausing execution of workflow [%s] to wait for signal [%s]", workflowRunId, e.getSignal());
         } catch (WorkflowStillSleepingException e) {
-            logger.atInfo().log("Workflow [%s] has been sleeping [%s] for [%s] out of [%s]", workflowId, e.getIdentifier(), e.getElapsedSleepTime(), e.getNapTime());
+            logger.atInfo().log("Workflow [%s] has been sleeping [%s] for [%s] out of [%s]", workflowRunId, e.getIdentifier(), e.getElapsedSleepTime(), e.getNapTime());
         } catch (WorkflowSleepingException e) {
-            logger.atInfo().log("Pausing execution of workflow [%s] to sleep [%s] for [%s]", workflowId, e.getIdentifier(), e.getNapTime());
+            logger.atInfo().log("Pausing execution of workflow [%s] to sleep [%s] for [%s]", workflowRunId, e.getIdentifier(), e.getNapTime());
         } catch (ConditionNotSatisfiedException e) {
-            logger.atInfo().log("Pausing execution of workflow [%s] because condition [%s] is not satisfied", workflowId, e.getIdentifier());
+            logger.atInfo().log("Pausing execution of workflow [%s] because condition [%s] is not satisfied", workflowRunId, e.getIdentifier());
         } catch (Exception e) {
             // TODO -- save some kind of Failure data with the failed workflow
-            logger.atSevere().withCause(e).log("Workflow [%s] execution failed", workflowId);
-            this.workflowRepository.failWorkflowRun(workflowId);
+            logger.atSevere().withCause(e).log("Workflow [%s] execution failed", workflowRunId);
+            this.stateWriter.failWorkflowRun(workflowRunId);
         } finally {
             executionContext.remove();
         }
@@ -144,20 +153,34 @@ public class WorkflowExecutor {
         ), wakeupTime);
     }
 
-    public <T extends Serializable> void signalWorkflowRun(String workflowId, String signalName, T signalValue) {
-        logger.atInfo().log("received signal [%s::%s]", workflowId, signalName);
+    public <T extends Serializable> void signalWorkflowRun(String workflowRunId, String signalName, T signalValue) {
+        logger.atInfo().log("received signal [%s::%s]", workflowRunId, signalName);
         //TODO -- validate the signalValue is of the expected type
         TaskInstance<SignalWorkflowTaskInput> instance = signalWorkflowTask.instance(
-                "signal::%s::%s".formatted(workflowId, signalName),
-                new SignalWorkflowTaskInput(workflowId, signalName, signalValue));
+                "signal::%s::%s".formatted(workflowRunId, signalName),
+                new SignalWorkflowTaskInput(workflowRunId, signalName, signalValue));
         scheduler.schedule(instance, Instant.now());
         //TODO - track signal sent in addition to signal received
-        Awaitility.await().atMost(20, TimeUnit.SECONDS).until(() -> this.workflowRepository.isSignalReceived(workflowId, signalName));
+        Awaitility.await().atMost(20, TimeUnit.SECONDS).until(() -> this.stateReader.getSignalFunction(workflowRunId, signalName).isReceived());
     }
 
-    public <P extends Serializable> void runWorkflow(Class<? extends RunnableWorkflow<?, P>> workflowClass, P workflowParam, String workflowId) {
+    public <I extends Serializable, O extends Serializable> void runWorkflow(Class<? extends RunnableWorkflow<I, O>> workflowClass, I workflowParam, String workflowId) {
         logger.atInfo().log("scheduling run for new workflow [%s] of type [%s]", workflowId, workflowClass.getName());
-        String workflowRunId = this.workflowRepository.scheduleRunForNewWorkflow(workflowId, workflowClass, workflowParam);
+        String workflowRunId = this.stateWriter.scheduleRunForNewWorkflow(workflowId, workflowClass, workflowParam);
+        startRun(workflowId, workflowRunId);
+    }
+
+    public void reRunWorkflowFromStart(String workflowId) {
+        // TODO - test this should fail if workflow does not exist
+        // TODO - test this should fail if existing workflow's latest run is not in a terminal state
+        logger.atInfo().log("scheduling re-run of existing workflow [%s]", workflowId);
+        String workflowRunId = stateWriter.scheduleNewRunForExistingWorkflow(workflowId);
+        startRun(workflowId, workflowRunId);
+    }
+
+    private void startRun(String workflowId, String workflowRunId) {
+        //TODO -- fix the fact that we are passing workflowRunId into a task input
+        // param named workflowId
         TaskInstance<RunWorkflowTaskInput> instance = startWorkflowTask.instance(
                 "workflow::%s::%s".formatted(workflowId, workflowRunId),
                 new RunWorkflowTaskInput(workflowRunId));
@@ -183,5 +206,4 @@ public class WorkflowExecutor {
             this.executionContext.remove();
         });
     }
-
 }

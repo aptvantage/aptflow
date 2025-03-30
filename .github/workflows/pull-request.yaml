@@ -4,7 +4,8 @@ on:
     branches:
       - main
 jobs:
-  publish-latest-snapshot:
+  verify-pull-request:
+    name: Verify Pull Request
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

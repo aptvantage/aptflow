@@ -180,3 +180,43 @@ FROM sleep s
          LEFT JOIN event completed on s.completed_event_id = completed.id
 
 );
+
+
+CREATE
+OR REPLACE VIEW v_workflow_run_step_function AS (
+SELECT
+    a.workflow_run_id,
+    a.name AS function_id,
+    'ACTIVITY' AS function_type,
+    a.started_event_id AS started_event_id,
+    a.completed_event_id AS completed_event_id
+FROM activity a
+
+UNION
+SELECT
+    c.workflow_run_id,
+    c.identifier AS function_id,
+    'CONDITION' AS function_type,
+    c.waiting_event_id AS started_event_id,
+    c.satisfied_event_id AS completed_event_id
+FROM "condition" c
+
+UNION
+SELECT
+    s.workflow_run_id,
+    s.name AS function_id,
+    'SIGNAL' AS function_type,
+    s.waiting_event_id AS started_event_id,
+    s.received_event_id AS completed_event_id
+FROM signal s
+
+UNION
+SELECT
+    s.workflow_run_id,
+    s.identifier AS function_id,
+    'SLEEP' AS function_type,
+    s.started_event_id AS started_event_id,
+    s.completed_event_id AS completed_event_id
+FROM sleep s
+
+);

@@ -9,7 +9,7 @@ import java.util.concurrent.CompletableFuture;
 
 import static aptvantage.aptflow.api.WorkflowFunctions.activity;
 
-public class ExampleWorkflowWithAsyncActivities implements RunnableWorkflow<String, Integer> {
+public class ExampleWorkflowWithAsyncActivities implements RunnableWorkflow<Integer, String> {
     @Override
     public String execute(Integer param) {
 

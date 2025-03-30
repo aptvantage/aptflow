@@ -3,9 +3,10 @@ package aptvantage.aptflow;
 import aptvantage.aptflow.api.RunnableWorkflow;
 import aptvantage.aptflow.api.WorkflowFunctions;
 import aptvantage.aptflow.engine.WorkflowExecutor;
-import aptvantage.aptflow.engine.persistence.WorkflowRepository;
-import aptvantage.aptflow.model.Event;
-import aptvantage.aptflow.model.WorkflowRunStatus;
+import aptvantage.aptflow.engine.persistence.StateReader;
+import aptvantage.aptflow.engine.persistence.StateWriter;
+import aptvantage.aptflow.model.StepFunctionEvent;
+import aptvantage.aptflow.model.WorkflowRun;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import org.flywaydb.core.Flyway;
@@ -20,13 +21,19 @@ import java.util.Set;
 
 public class AptWorkflow {
 
-    public static WorkflowRepository repository;
+    public static StateWriter repository;
     private final WorkflowExecutor workflowExecutor;
     private final AptWorkflowBuilder builder;
+    private final StateReader stateReader;
 
-    private AptWorkflow(WorkflowExecutor workflowExecutor, AptWorkflowBuilder builder) {
+    private AptWorkflow(
+            WorkflowExecutor workflowExecutor,
+            AptWorkflowBuilder builder,
+            StateReader stateReader
+    ) {
         this.workflowExecutor = workflowExecutor;
         this.builder = builder;
+        this.stateReader = stateReader;
     }
 
     public static AptWorkflowBuilder builder() {
@@ -34,27 +41,36 @@ public class AptWorkflow {
     }
 
     public <T extends Serializable> void signalWorkflow(String workflowId, String signalName, T signalValue) {
-        String workflowRunId = repository.getActiveWorkflowRunId(workflowId);
-        this.workflowExecutor.signalWorkflowRun(workflowRunId, signalName, signalValue);
+        WorkflowRun<Serializable, Serializable> activeRun = stateReader.getActiveRunForWorkflowId(workflowId, null);
+        this.workflowExecutor.signalWorkflowRun(activeRun.getId(), signalName, signalValue);
     }
 
-    public <P extends Serializable> void runWorkflow(Class<? extends RunnableWorkflow<?, P>> workflowClass, P workflowParam, String workflowId) {
-        this.workflowExecutor.runWorkflow(workflowClass, workflowParam, workflowId);
+    public <I extends Serializable, O extends Serializable> void runWorkflow(
+            Class<? extends RunnableWorkflow<I, O>> workflowClass,
+            I workflowInput,
+            String workflowId) {
+        this.workflowExecutor.runWorkflow(workflowClass, workflowInput, workflowId);
     }
 
-    public <OUTPUT extends Serializable> OUTPUT getWorkflowOutput(String workflowId, Class<? extends RunnableWorkflow<OUTPUT, ? extends Serializable>> workflowClass) {
-        String workflowRunId = repository.getActiveWorkflowRunId(workflowId);
-        return repository.getWorkflowRun(workflowRunId, workflowClass).output();
+    public void reRunWorkflowFromStart(String workflowId) {
+        this.workflowExecutor.reRunWorkflowFromStart(workflowId);
     }
 
-    public WorkflowRunStatus getWorkflowStatus(String workflowId) {
-        String workflowRunId = repository.getActiveWorkflowRunId(workflowId);
-        return repository.getWorkflowRunStatus(workflowRunId);
+    //TODO -- reRunWorkflowFromFailed
+
+
+    public <I extends Serializable, O extends Serializable>
+    O getWorkflowOutput(String workflowId, Class<? extends RunnableWorkflow<I, O>> workflowClass) {
+        return stateReader.getActiveRunForWorkflowId(workflowId, workflowClass).getOutput();
     }
 
-    public List<Event> getWorkflowEvents(String workflowId) {
-        String workflowRunId = repository.getActiveWorkflowRunId(workflowId);
-        return repository.getWorkflowEvents(workflowRunId);
+    public <I extends Serializable, O extends Serializable> WorkflowRun<I, O> getWorkflowStatus(String workflowId) {
+        return stateReader.getActiveRunForWorkflowId(workflowId, null);
+    }
+
+    public <I extends Serializable, O extends Serializable> List<StepFunctionEvent<I, O>> getWorkflowEvents(String workflowId) {
+        WorkflowRun<I, O> activeRun = stateReader.getActiveRunForWorkflowId(workflowId, null);
+        return activeRun.getFunctionEvents();
     }
 
     public void stop() {
@@ -114,18 +130,22 @@ public class AptWorkflow {
         public AptWorkflow start() {
             //TODO -- null check this.dataSource
             runDatabaseMigration(this.dataSource);
+            Jdbi jdbi = Jdbi.create(this.dataSource);
 
-            AptWorkflow.repository = new WorkflowRepository(Jdbi.create(this.dataSource));
+            StateReader stateReader = new StateReader(jdbi);
+            AptWorkflow.repository = new StateWriter(jdbi, stateReader);
+
             WorkflowExecutor executor = new WorkflowExecutor(
                     this.dataSource,
                     AptWorkflow.repository,
-                    workflowDependencies);
+                    workflowDependencies,
+                    stateReader);
 
-            WorkflowFunctions.initialize(executor);
+            WorkflowFunctions.initialize(executor, stateReader);
 
             // start this (last) after the rest of the app is completely initialized
             executor.start();
-            return new AptWorkflow(executor, this);
+            return new AptWorkflow(executor, this, stateReader);
         }
 
 
