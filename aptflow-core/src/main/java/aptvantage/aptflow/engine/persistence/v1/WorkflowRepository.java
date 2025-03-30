@@ -269,9 +269,9 @@ public class WorkflowRepository {
 
     }
 
-    private <I extends Serializable, O extends Serializable> Class<? extends RunnableWorkflow<I,O>> workflowClassFromClassName(String className) {
+    private <I extends Serializable, O extends Serializable> Class<? extends RunnableWorkflow<I, O>> workflowClassFromClassName(String className) {
         try {
-            return (Class<? extends RunnableWorkflow<I,O>>) Class.forName(className);
+            return (Class<? extends RunnableWorkflow<I, O>>) Class.forName(className);
         } catch (ClassNotFoundException e) {
             throw new IllegalStateException(e);
         }
@@ -640,51 +640,6 @@ public class WorkflowRepository {
                     .execute();
 
         });
-    }
-
-    public Sleep getSleep(String workflowRunId, String identifier) {
-        return jdbi.withHandle(handle ->
-                handle.createQuery("""
-                                SELECT
-                                    s.workflow_run_id AS s_workflow_run_id,
-                                    s.identifier AS s_identifier,
-                                    s.duration_in_millis AS s_duration_in_millis,
-                                    started.timestamp AS started_timestamp,
-                                    started.category AS started_category,
-                                    started.status AS started_status,
-                                    completed.timestamp AS completed_timestamp,
-                                    completed.category AS completed_category,
-                                    completed.status AS completed_status
-                                FROM sleep s
-                                  LEFT JOIN event started
-                                    ON s.started_event_id = started.id
-                                  LEFT JOIN event completed
-                                    ON s.completed_event_id = completed.id
-                                WHERE s.workflow_run_id = :workflowRunId
-                                    AND s.identifier = :identifier
-                                """)
-                        .bind("workflowRunId", workflowRunId)
-                        .bind("identifier", identifier)
-                        .map((rs, ctx) ->
-                                new Sleep(
-                                        rs.getString("s_workflow_run_id"),
-                                        rs.getString("s_identifier"),
-                                        Duration.ofMillis(rs.getLong("s_duration_in_millis")),
-                                        new Event(
-                                                eventCategoryColumnMapper.map(rs, "started_category", ctx),
-                                                eventStatusColumnMapper.map(rs, "started_status", ctx),
-                                                rs.getString("s_identifier"),
-                                                instantColumnMapper.map(rs, "started_timestamp", ctx)
-                                        ),
-                                        new Event(
-                                                eventCategoryColumnMapper.map(rs, "completed_category", ctx),
-                                                eventStatusColumnMapper.map(rs, "completed_status", ctx),
-                                                rs.getString("s_identifier"),
-                                                instantColumnMapper.map(rs, "completed_timestamp", ctx)
-                                        )
-                                ))
-                        .findOne()
-                        .orElse(null));
     }
 
     static class SerializableColumnMapper implements ColumnMapper<Serializable> {

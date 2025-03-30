@@ -108,6 +108,41 @@ public class StateReader {
         );
     }
 
+    public <I extends Serializable, O extends Serializable> SleepFunction<I, O>
+    getSleepFunction(
+            String workflowRunId, String identifier
+    ) {
+        return jdbi.withHandle(handle ->
+                handle.createQuery("""
+                                SELECT 
+                                    workflow_run_id,
+                                    identifier,
+                                    started_event_id,
+                                    completed_event_id,
+                                    duration_in_millis
+                                FROM sleep
+                                WHERE 
+                                    workflow_run_id = :workflowRunId
+                                    AND identifier = :identifier
+                                """)
+                        .bind("workflowRunId", workflowRunId)
+                        .bind("identifier", identifier)
+                        .map((rs, ctx) ->
+                                new SleepFunction<I, O>(
+                                        rs.getString("workflow_run_id"),
+                                        rs.getString("identifier"),
+                                        rs.getString("started_event_id"),
+                                        rs.getString("completed_event_id"),
+                                        rs.getLong("duration_in_millis"),
+                                        this
+                                )
+                        )
+                        .findOne()
+                        .orElse(null)
+
+        );
+    }
+
     public <I extends Serializable, O extends Serializable> List<StepFunction<I, O>> getFunctionsForWorkflowRun(
             String workflowRunId
     ) {
@@ -187,7 +222,7 @@ public class StateReader {
         );
     }
 
-    public <I extends Serializable, O extends Serializable> WorkflowRun<I,O> getActiveRunForWorkflowId(String workflowId) {
+    public <I extends Serializable, O extends Serializable> WorkflowRun<I, O> getActiveRunForWorkflowId(String workflowId) {
         return (WorkflowRun<I, O>) getRunsForWorkflow(workflowId)
                 .stream()
                 .filter(run -> run.getArchived() == null)

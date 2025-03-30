@@ -46,16 +46,20 @@ public class SleepFunction<I extends Serializable, O extends Serializable> imple
     }
 
     @Override
-    public StepFunctionEvent<I,O> getStartedEvent() {
+    public StepFunctionEvent<I, O> getStartedEvent() {
         return stateReader.getStepFunctionEvent(startedEventId);
     }
 
     @Override
-    public StepFunctionEvent<I,O> getCompletedEvent() {
+    public StepFunctionEvent<I, O> getCompletedEvent() {
         return stateReader.getStepFunctionEvent(completedEventId);
     }
 
     public Duration getDuration() {
         return Duration.ofMillis(durationInMillis);
+    }
+
+    public boolean isCompleted() {
+        return completedEventId != null;
     }
 }

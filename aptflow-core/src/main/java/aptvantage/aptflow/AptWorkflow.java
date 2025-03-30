@@ -45,6 +45,7 @@ public class AptWorkflow {
             String workflowId) {
         this.workflowExecutor.runWorkflow(workflowClass, workflowInput, workflowId);
     }
+
     public void reRunWorkflowFromStart(String workflowId) {
         this.workflowExecutor.reRunWorkflowFromStart(workflowId);
     }
@@ -134,7 +135,7 @@ public class AptWorkflow {
                     AptWorkflow.repository,
                     workflowDependencies);
 
-            WorkflowFunctions.initialize(executor);
+            WorkflowFunctions.initialize(executor, stateReader);
 
             // start this (last) after the rest of the app is completely initialized
             executor.start();

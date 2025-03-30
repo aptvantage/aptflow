@@ -55,7 +55,7 @@ public class AcceptanceTest {
     public void testReRunWorkflow() throws Exception {
         // When a workflow runs
         String workflowId = "testReRunWorkflow";
-        aptWorkflow.runWorkflow(ExampleSimpleWorkflow.class,888, workflowId);
+        aptWorkflow.runWorkflow(ExampleSimpleWorkflow.class, 888, workflowId);
 
         // then it will eventually complete
         Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() ->

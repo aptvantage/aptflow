@@ -2,10 +2,11 @@ package aptvantage.aptflow.api;
 
 import aptvantage.aptflow.AptWorkflow;
 import aptvantage.aptflow.engine.*;
+import aptvantage.aptflow.engine.persistence.StateReader;
+import aptvantage.aptflow.model.SleepFunction;
 import aptvantage.aptflow.model.v1.Activity;
 import aptvantage.aptflow.model.v1.Condition;
 import aptvantage.aptflow.model.v1.Signal;
-import aptvantage.aptflow.model.v1.Sleep;
 import com.google.common.flogger.FluentLogger;
 
 import java.io.Serializable;
@@ -20,13 +21,15 @@ public class WorkflowFunctions {
 
     private static WorkflowFunctions SINGLETON = null;
     private final WorkflowExecutor workflowExecutor;
+    private final StateReader stateReader;
 
-    public WorkflowFunctions(WorkflowExecutor workflowExecutor) {
+    public WorkflowFunctions(WorkflowExecutor workflowExecutor, StateReader stateReader) {
         this.workflowExecutor = workflowExecutor;
+        this.stateReader = stateReader;
     }
 
-    public static void initialize(WorkflowExecutor workflowExecutor) {
-        SINGLETON = new WorkflowFunctions(workflowExecutor);
+    public static void initialize(WorkflowExecutor workflowExecutor, StateReader stateReader) {
+        SINGLETON = new WorkflowFunctions(workflowExecutor, stateReader);
     }
 
     public static void sleep(String identifier, Duration duration) {
@@ -92,20 +95,20 @@ public class WorkflowFunctions {
     private void _sleep(String identifier, Duration duration) {
         String workflowRunId = workflowExecutor.getExecutionContext().workflowRunId();
         logger.atFine().log("processing workflow sleep [%s::%s]".formatted(workflowRunId, identifier));
-        Sleep sleep = AptWorkflow.repository.getSleep(workflowRunId, identifier);
-        if (sleep == null) {
+        SleepFunction<? extends Serializable, ? extends Serializable> sleepFunction = stateReader.getSleepFunction(workflowRunId, identifier);
+        if (sleepFunction == null) {
             AptWorkflow.repository.newSleepStarted(workflowRunId, identifier, duration);
             logger.atInfo().log("scheduling wake-up-call for sleep [%s::%s] in [%s]", workflowRunId, identifier, duration);
             this.workflowExecutor.scheduleWakeUp(workflowRunId, identifier, Instant.now().plus(duration));
             throw new WorkflowSleepingException(identifier, duration);
         }
-        if (sleep.isCompleted()) {
+        if (sleepFunction.isCompleted()) {
             logger.atInfo().log("workflow has completed sleep [%s::%s]".formatted(workflowRunId, identifier));
             return;
         }
 
         // If a sleeping workflow was signaled, it needs to continue sleeping until its wakeup call
-        Duration elapsedSleepTime = Duration.ofMillis(Instant.now().toEpochMilli() - sleep.started().timestamp().toEpochMilli());
+        Duration elapsedSleepTime = Duration.ofMillis(Instant.now().toEpochMilli() - sleepFunction.getStartedEvent().getTimestamp().toEpochMilli());
         throw new WorkflowStillSleepingException(identifier, elapsedSleepTime, duration);
     }
 

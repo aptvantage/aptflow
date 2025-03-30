@@ -46,12 +46,12 @@ public class SignalFunction<I extends Serializable, O extends Serializable, S ex
     }
 
     @Override
-    public StepFunctionEvent<I,O> getStartedEvent() {
+    public StepFunctionEvent<I, O> getStartedEvent() {
         return stateReader.getStepFunctionEvent(waitingEventId);
     }
 
     @Override
-    public StepFunctionEvent<I,O> getCompletedEvent() {
+    public StepFunctionEvent<I, O> getCompletedEvent() {
         return stateReader.getStepFunctionEvent(receivedEventId);
     }
 
