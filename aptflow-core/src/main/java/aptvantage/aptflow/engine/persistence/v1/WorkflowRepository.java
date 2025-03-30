@@ -13,7 +13,6 @@ import java.sql.SQLException;
 import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -191,90 +190,6 @@ public class WorkflowRepository {
         } catch (ClassNotFoundException e) {
             throw new IllegalStateException(e);
         }
-    }
-
-    public WorkflowRunStatus getWorkflowRunStatus(String workflowRunId) {
-        EventStatus workflowStatus = getLatestEventStatus(workflowRunId, EventCategory.WORKFLOW);
-        List<Function> functions = getFunctions(workflowRunId);
-        //TODO -- provide failed functions
-        return new WorkflowRunStatus(workflowStatus, functions);
-
-    }
-
-    List<Function> getFunctions(String workflowRunId) {
-        return jdbi.withHandle(handle ->
-                handle.createQuery("""
-                                SELECT
-                                    function_id,
-                                    category,
-                                    started,
-                                    completed
-                                FROM
-                                    v_workflow_run_function
-                                WHERE
-                                    workflow_run_id = :workflowRunId
-                                ORDER BY started
-                                """)
-                        .bind("workflowRunId", workflowRunId)
-                        .map((rs, ctx) ->
-                                new Function(
-                                        rs.getString("function_id"),
-                                        eventCategoryColumnMapper.map(rs, "category", ctx),
-                                        instantColumnMapper.map(rs, "started", ctx),
-                                        instantColumnMapper.map(rs, "completed", ctx)
-                                ))
-                        .collectIntoList()
-        );
-    }
-
-    EventStatus getLatestEventStatus(String workflowRunId, EventCategory category) {
-        return jdbi.withHandle(handle ->
-                handle.createQuery("""
-                                SELECT status
-                                FROM event
-                                WHERE workflow_run_id = :workflowRunId
-                                    AND category = :category
-                                ORDER BY timestamp DESC
-                                LIMIT 1
-                                """)
-                        .bind("workflowRunId", workflowRunId)
-                        .bind("category", category)
-                        .map((rs, ctx) ->
-                                EventStatus.valueOf(rs.getString("status")))
-                        .findOne()
-                        .orElse(null)
-        );
-    }
-
-    public List<Event> getWorkflowEvents(String workflowRunId) {
-        return jdbi.withHandle(handle ->
-                handle.createQuery("""
-                                SELECT
-                                    id,
-                                    workflow_run_id,
-                                    category,
-                                    status,
-                                    timestamp,
-                                    function_id
-                                FROM v_workflow_run_event
-                                WHERE workflow_run_id = :workflowRunId
-                                ORDER BY timestamp
-                                """)
-                        .bind("workflowRunId", workflowRunId)
-                        .map((rs, ctx) ->
-                                new Event(
-                                        eventCategoryColumnMapper.map(rs, "category", ctx),
-                                        eventStatusColumnMapper.map(rs, "status", ctx),
-                                        rs.getString("function_id"),
-                                        instantColumnMapper.map(rs, "timestamp", ctx)
-                                ))
-                        .collectIntoList()
-        );
-    }
-
-    public <O extends Serializable> WorkflowRun<? extends Serializable, O>
-    getWorkflowRun(String workflowRunId, Class<? extends RunnableWorkflow<? extends Serializable, O>> workflowClass) {
-        return getWorkflowRun(workflowRunId);
     }
 
     public <I extends Serializable, O extends Serializable> WorkflowRun<I, O> getWorkflowRun(String workflowRunId) {

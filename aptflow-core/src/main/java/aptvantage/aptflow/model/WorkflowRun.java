@@ -78,4 +78,28 @@ public class WorkflowRun<I extends Serializable, O extends Serializable> {
     public List<StepFunctionEvent<I, O>> getFunctionEvents() {
         return stateReader.getStepFunctionEventsForWorkflowRun(id);
     }
+
+    public List<StepFunction<I, O>> getActiveFunctions() {
+        return getFunctions().stream()
+                .filter(stepFunction -> stepFunction.getCompletedEvent() == null)
+                .toList();
+    }
+
+    public boolean hasCompleted() {
+        return completedEventId != null;
+    }
+
+    public boolean isWaitingForSignal() {
+        return getActiveFunctions().stream()
+                .anyMatch(stepFunction -> stepFunction.getStepFunctionType() == StepFunctionType.SIGNAL);
+    }
+
+    public boolean hasStarted() {
+        return startedEventId != null;
+    }
+
+    public boolean hasFailed() {
+        return hasCompleted() &&
+                getCompletedEvent().getStatus() == StepFunctionEventStatus.FAILED;
+    }
 }

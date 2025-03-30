@@ -1,9 +1,9 @@
 package aptvantage.aptflow;
 
 import aptvantage.aptflow.examples.*;
-import aptvantage.aptflow.model.v1.Event;
-import aptvantage.aptflow.model.v1.EventCategory;
-import aptvantage.aptflow.model.v1.EventStatus;
+import aptvantage.aptflow.model.StepFunctionEvent;
+import aptvantage.aptflow.model.StepFunctionEventStatus;
+import aptvantage.aptflow.model.StepFunctionType;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.parallel.Execution;
@@ -12,6 +12,7 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.io.Serializable;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -42,12 +43,12 @@ public class AcceptanceTest {
         aptWorkflow.stop();
     }
 
-    static boolean eventMatches(Event event, EventCategory category, EventStatus status, String functionId) {
-        return eventMatches(event, category, status) && functionId.equals(event.functionId());
+    static <I extends Serializable, O extends Serializable> boolean eventMatches(StepFunctionEvent<I, O> event, StepFunctionType category, StepFunctionEventStatus status, String functionId) {
+        return eventMatches(event, category, status) && functionId.equals(event.getStepFunction().getId());
     }
 
-    static boolean eventMatches(Event event, EventCategory category, EventStatus status) {
-        return event.category() == category && event.status() == status;
+    static <I extends Serializable, O extends Serializable> boolean eventMatches(StepFunctionEvent<I, O> event, StepFunctionType category, StepFunctionEventStatus status) {
+        return event.getFunctionType() == category && event.getStatus() == status;
     }
 
     @Test
@@ -59,7 +60,7 @@ public class AcceptanceTest {
 
         // then it will eventually complete
         Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() ->
-                aptWorkflow.getWorkflowStatus(workflowId).isComplete());
+                aptWorkflow.getWorkflowStatus(workflowId).hasCompleted());
 
         // and then the output is correct
         String output = aptWorkflow.getWorkflowOutput(workflowId, ExampleSimpleWorkflow.class);
@@ -70,7 +71,7 @@ public class AcceptanceTest {
 
         // then the workflow eventually completes again
         Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() ->
-                aptWorkflow.getWorkflowStatus(workflowId).isComplete());
+                aptWorkflow.getWorkflowStatus(workflowId).hasCompleted());
 
         // and then the output is correct again
         output = aptWorkflow.getWorkflowOutput(workflowId, ExampleSimpleWorkflow.class);
@@ -92,17 +93,17 @@ public class AcceptanceTest {
 
         // then it eventually completes
         Awaitility.await().atMost(1, TimeUnit.MINUTES)
-                .until(() -> aptWorkflow.getWorkflowStatus(workflowId).isComplete());
+                .until(() -> aptWorkflow.getWorkflowStatus(workflowId).hasCompleted());
 
         // and the expected output is correct
         String output = aptWorkflow.getWorkflowOutput(workflowId, ExampleSimpleWorkflow.class);
         assertEquals("777", output);
 
-        List<Event> events = aptWorkflow.getWorkflowEvents(workflowId);
+        List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getWorkflowEvents(workflowId);
         assertEquals(3, events.size());
-        assertTrue(eventMatches(events.get(0), EventCategory.WORKFLOW, EventStatus.SCHEDULED));
-        assertTrue(eventMatches(events.get(1), EventCategory.WORKFLOW, EventStatus.STARTED));
-        assertTrue(eventMatches(events.get(2), EventCategory.WORKFLOW, EventStatus.COMPLETED));
+        assertTrue(eventMatches(events.get(0), StepFunctionType.WORKFLOW, StepFunctionEventStatus.SCHEDULED));
+        assertTrue(eventMatches(events.get(1), StepFunctionType.WORKFLOW, StepFunctionEventStatus.STARTED));
+        assertTrue(eventMatches(events.get(2), StepFunctionType.WORKFLOW, StepFunctionEventStatus.COMPLETED));
 
     }
 
@@ -123,20 +124,20 @@ public class AcceptanceTest {
 
         // then the workflow completes
         Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() ->
-                aptWorkflow.getWorkflowStatus(workflowId).isComplete()
+                aptWorkflow.getWorkflowStatus(workflowId).hasCompleted()
         );
 
         // and the expected result is received
         assertEquals("7770", aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithSignal.class));
 
         // and the event sequence is correct
-        List<Event> events = aptWorkflow.getWorkflowEvents(workflowId);
+        List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getWorkflowEvents(workflowId);
         assertEquals(5, events.size());  // 3 WORKFLOW events and 2 SIGNAL events
-        assertTrue(eventMatches(events.get(0), EventCategory.WORKFLOW, EventStatus.SCHEDULED));
-        assertTrue(eventMatches(events.get(1), EventCategory.WORKFLOW, EventStatus.STARTED));
-        assertTrue(eventMatches(events.get(2), EventCategory.SIGNAL, EventStatus.WAITING));
-        assertTrue(eventMatches(events.get(3), EventCategory.SIGNAL, EventStatus.RECEIVED));
-        assertTrue(eventMatches(events.get(4), EventCategory.WORKFLOW, EventStatus.COMPLETED));
+        assertTrue(eventMatches(events.get(0), StepFunctionType.WORKFLOW, StepFunctionEventStatus.SCHEDULED));
+        assertTrue(eventMatches(events.get(1), StepFunctionType.WORKFLOW, StepFunctionEventStatus.STARTED));
+        assertTrue(eventMatches(events.get(2), StepFunctionType.SIGNAL, StepFunctionEventStatus.WAITING));
+        assertTrue(eventMatches(events.get(3), StepFunctionType.SIGNAL, StepFunctionEventStatus.RECEIVED));
+        assertTrue(eventMatches(events.get(4), StepFunctionType.WORKFLOW, StepFunctionEventStatus.COMPLETED));
 
     }
 
@@ -149,20 +150,20 @@ public class AcceptanceTest {
 
         // then the workflow will eventually complete
         Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() ->
-                aptWorkflow.getWorkflowStatus(workflowId).isComplete());
+                aptWorkflow.getWorkflowStatus(workflowId).hasCompleted());
 
         // and the output is correct
         String output = aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithSleep.class);
         assertEquals("777", output);
 
         // and the event sequence is correct
-        List<Event> events = aptWorkflow.getWorkflowEvents(workflowId);
+        List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getWorkflowEvents(workflowId);
         assertEquals(5, events.size());
-        assertTrue(eventMatches(events.get(0), EventCategory.WORKFLOW, EventStatus.SCHEDULED));
-        assertTrue(eventMatches(events.get(1), EventCategory.WORKFLOW, EventStatus.STARTED));
-        assertTrue(eventMatches(events.get(2), EventCategory.SLEEP, EventStatus.STARTED));
-        assertTrue(eventMatches(events.get(3), EventCategory.SLEEP, EventStatus.COMPLETED));
-        assertTrue(eventMatches(events.get(4), EventCategory.WORKFLOW, EventStatus.COMPLETED));
+        assertTrue(eventMatches(events.get(0), StepFunctionType.WORKFLOW, StepFunctionEventStatus.SCHEDULED));
+        assertTrue(eventMatches(events.get(1), StepFunctionType.WORKFLOW, StepFunctionEventStatus.STARTED));
+        assertTrue(eventMatches(events.get(2), StepFunctionType.SLEEP, StepFunctionEventStatus.STARTED));
+        assertTrue(eventMatches(events.get(3), StepFunctionType.SLEEP, StepFunctionEventStatus.COMPLETED));
+        assertTrue(eventMatches(events.get(4), StepFunctionType.WORKFLOW, StepFunctionEventStatus.COMPLETED));
     }
 
     @Test
@@ -174,20 +175,20 @@ public class AcceptanceTest {
 
         // then the workflow eventually completes
         Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() ->
-                aptWorkflow.getWorkflowStatus(workflowId).isComplete());
+                aptWorkflow.getWorkflowStatus(workflowId).hasCompleted());
 
         // and the output is correct
         String output = aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithCondition.class);
         assertEquals("3", output);
 
         // and the event sequence is correct
-        List<Event> events = aptWorkflow.getWorkflowEvents(workflowId);
+        List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getWorkflowEvents(workflowId);
         assertEquals(5, events.size());
-        assertTrue(eventMatches(events.get(0), EventCategory.WORKFLOW, EventStatus.SCHEDULED));
-        assertTrue(eventMatches(events.get(1), EventCategory.WORKFLOW, EventStatus.STARTED));
-        assertTrue(eventMatches(events.get(2), EventCategory.CONDITION, EventStatus.WAITING));
-        assertTrue(eventMatches(events.get(3), EventCategory.CONDITION, EventStatus.SATISFIED));
-        assertTrue(eventMatches(events.get(4), EventCategory.WORKFLOW, EventStatus.COMPLETED));
+        assertTrue(eventMatches(events.get(0), StepFunctionType.WORKFLOW, StepFunctionEventStatus.SCHEDULED));
+        assertTrue(eventMatches(events.get(1), StepFunctionType.WORKFLOW, StepFunctionEventStatus.STARTED));
+        assertTrue(eventMatches(events.get(2), StepFunctionType.CONDITION, StepFunctionEventStatus.WAITING));
+        assertTrue(eventMatches(events.get(3), StepFunctionType.CONDITION, StepFunctionEventStatus.SATISFIED));
+        assertTrue(eventMatches(events.get(4), StepFunctionType.WORKFLOW, StepFunctionEventStatus.COMPLETED));
 
     }
 
@@ -211,19 +212,19 @@ public class AcceptanceTest {
 
         // then the workflow will eventually complete
         Awaitility.await().atMost(1, TimeUnit.MINUTES).until(() ->
-                aptWorkflow.getWorkflowStatus(workflowId).isComplete()
+                aptWorkflow.getWorkflowStatus(workflowId).hasCompleted()
         );
 
         // and the output is correct (which also implies successful completion)
         assertEquals("666asdf", aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithAllFunctions.class));
 
         // and the event stack contains every function
-        List<Event> events = aptWorkflow.getWorkflowEvents(workflowId);
-        assertTrue(events.stream().anyMatch(event -> event.category() == EventCategory.ACTIVITY));
-        assertTrue(events.stream().anyMatch(event -> event.category() == EventCategory.SIGNAL));
-        assertTrue(events.stream().anyMatch(event -> event.category() == EventCategory.SLEEP));
-        assertTrue(events.stream().anyMatch(event -> event.category() == EventCategory.WORKFLOW));
-        assertTrue(events.stream().anyMatch(event -> event.category() == EventCategory.CONDITION));
+        List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getWorkflowEvents(workflowId);
+        assertTrue(events.stream().anyMatch(event -> event.getFunctionType() == StepFunctionType.ACTIVITY));
+        assertTrue(events.stream().anyMatch(event -> event.getFunctionType() == StepFunctionType.SIGNAL));
+        assertTrue(events.stream().anyMatch(event -> event.getFunctionType() == StepFunctionType.SLEEP));
+        assertTrue(events.stream().anyMatch(event -> event.getFunctionType() == StepFunctionType.WORKFLOW));
+        assertTrue(events.stream().anyMatch(event -> event.getFunctionType() == StepFunctionType.CONDITION));
     }
 
     @Nested
@@ -239,20 +240,20 @@ public class AcceptanceTest {
 
             // when the workflow completes
             Awaitility.await().atMost(1, TimeUnit.MINUTES)
-                    .until(() -> aptWorkflow.getWorkflowStatus(workflowId).isComplete());
+                    .until(() -> aptWorkflow.getWorkflowStatus(workflowId).hasCompleted());
 
             // then the output is correct
             String output = aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithActivity.class);
             assertEquals("777", output);
 
             // and the event sequence is correct
-            List<Event> events = aptWorkflow.getWorkflowEvents(workflowId);
+            List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getWorkflowEvents(workflowId);
             assertEquals(5, events.size()); // 3 workflow and 2 activity
-            assertTrue(eventMatches(events.get(0), EventCategory.WORKFLOW, EventStatus.SCHEDULED));
-            assertTrue(eventMatches(events.get(1), EventCategory.WORKFLOW, EventStatus.STARTED));
-            assertTrue(eventMatches(events.get(2), EventCategory.ACTIVITY, EventStatus.STARTED));
-            assertTrue(eventMatches(events.get(3), EventCategory.ACTIVITY, EventStatus.COMPLETED));
-            assertTrue(eventMatches(events.get(4), EventCategory.WORKFLOW, EventStatus.COMPLETED));
+            assertTrue(eventMatches(events.get(0), StepFunctionType.WORKFLOW, StepFunctionEventStatus.SCHEDULED));
+            assertTrue(eventMatches(events.get(1), StepFunctionType.WORKFLOW, StepFunctionEventStatus.STARTED));
+            assertTrue(eventMatches(events.get(2), StepFunctionType.ACTIVITY, StepFunctionEventStatus.STARTED));
+            assertTrue(eventMatches(events.get(3), StepFunctionType.ACTIVITY, StepFunctionEventStatus.COMPLETED));
+            assertTrue(eventMatches(events.get(4), StepFunctionType.WORKFLOW, StepFunctionEventStatus.COMPLETED));
         }
 
         @Test
@@ -264,22 +265,22 @@ public class AcceptanceTest {
 
             // then it will eventually finish
             Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() ->
-                    aptWorkflow.getWorkflowStatus(workflowId).isComplete());
+                    aptWorkflow.getWorkflowStatus(workflowId).hasCompleted());
 
             // and the output will be correct
             String output = aptWorkflow.getWorkflowOutput(workflowId, ExampleWorkflowWithAsyncActivities.class);
             assertEquals("param: [777] oneSecondEcho: [1-seconds] twoSecondEcho: [2-seconds]", output);
 
             // and the activities run in parallel (2 activity starts followed by 2 completes)
-            List<Event> events = aptWorkflow.getWorkflowEvents(workflowId);
+            List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getWorkflowEvents(workflowId);
             assertEquals(7, events.size());
-            assertTrue(eventMatches(events.get(0), EventCategory.WORKFLOW, EventStatus.SCHEDULED));
-            assertTrue(eventMatches(events.get(1), EventCategory.WORKFLOW, EventStatus.STARTED));
-            assertTrue(eventMatches(events.get(2), EventCategory.ACTIVITY, EventStatus.STARTED));
-            assertTrue(eventMatches(events.get(3), EventCategory.ACTIVITY, EventStatus.STARTED));
-            assertTrue(eventMatches(events.get(4), EventCategory.ACTIVITY, EventStatus.COMPLETED));
-            assertTrue(eventMatches(events.get(5), EventCategory.ACTIVITY, EventStatus.COMPLETED));
-            assertTrue(eventMatches(events.get(6), EventCategory.WORKFLOW, EventStatus.COMPLETED));
+            assertTrue(eventMatches(events.get(0), StepFunctionType.WORKFLOW, StepFunctionEventStatus.SCHEDULED));
+            assertTrue(eventMatches(events.get(1), StepFunctionType.WORKFLOW, StepFunctionEventStatus.STARTED));
+            assertTrue(eventMatches(events.get(2), StepFunctionType.ACTIVITY, StepFunctionEventStatus.STARTED));
+            assertTrue(eventMatches(events.get(3), StepFunctionType.ACTIVITY, StepFunctionEventStatus.STARTED));
+            assertTrue(eventMatches(events.get(4), StepFunctionType.ACTIVITY, StepFunctionEventStatus.COMPLETED));
+            assertTrue(eventMatches(events.get(5), StepFunctionType.ACTIVITY, StepFunctionEventStatus.COMPLETED));
+            assertTrue(eventMatches(events.get(6), StepFunctionType.WORKFLOW, StepFunctionEventStatus.COMPLETED));
         }
 
         @Test
@@ -299,23 +300,23 @@ public class AcceptanceTest {
             assertEquals(900, output);
 
             // and the event sequence is correct
-            List<Event> events = aptWorkflow.getWorkflowEvents(workflowId);
+            List<StepFunctionEvent<String, Integer>> events = aptWorkflow.getWorkflowEvents(workflowId);
             assertEquals(15, events.size());
-            assertTrue(eventMatches(events.get(0), EventCategory.WORKFLOW, EventStatus.SCHEDULED));
-            assertTrue(eventMatches(events.get(1), EventCategory.WORKFLOW, EventStatus.STARTED));
-            assertTrue(eventMatches(events.get(2), EventCategory.ACTIVITY, EventStatus.STARTED, "1"));
-            assertTrue(eventMatches(events.get(3), EventCategory.ACTIVITY, EventStatus.STARTED, "1.1"));
-            assertTrue(eventMatches(events.get(4), EventCategory.SLEEP, EventStatus.STARTED, "1.1.1"));
-            assertTrue(eventMatches(events.get(5), EventCategory.SLEEP, EventStatus.COMPLETED, "1.1.1"));
-            assertTrue(eventMatches(events.get(6), EventCategory.ACTIVITY, EventStatus.STARTED, "1.1.2"));
-            assertTrue(eventMatches(events.get(7), EventCategory.CONDITION, EventStatus.WAITING, "1.1.2.1"));
-            assertTrue(eventMatches(events.get(8), EventCategory.CONDITION, EventStatus.SATISFIED, "1.1.2.1"));
-            assertTrue(eventMatches(events.get(9), EventCategory.ACTIVITY, EventStatus.COMPLETED, "1.1.2"));
-            assertTrue(eventMatches(events.get(10), EventCategory.ACTIVITY, EventStatus.STARTED, "1.1.3"));
-            assertTrue(eventMatches(events.get(11), EventCategory.ACTIVITY, EventStatus.COMPLETED, "1.1.3"));
-            assertTrue(eventMatches(events.get(12), EventCategory.ACTIVITY, EventStatus.COMPLETED, "1.1"));
-            assertTrue(eventMatches(events.get(13), EventCategory.ACTIVITY, EventStatus.COMPLETED, "1"));
-            assertTrue(eventMatches(events.get(14), EventCategory.WORKFLOW, EventStatus.COMPLETED));
+            assertTrue(eventMatches(events.get(0), StepFunctionType.WORKFLOW, StepFunctionEventStatus.SCHEDULED));
+            assertTrue(eventMatches(events.get(1), StepFunctionType.WORKFLOW, StepFunctionEventStatus.STARTED));
+            assertTrue(eventMatches(events.get(2), StepFunctionType.ACTIVITY, StepFunctionEventStatus.STARTED, "1"));
+            assertTrue(eventMatches(events.get(3), StepFunctionType.ACTIVITY, StepFunctionEventStatus.STARTED, "1.1"));
+            assertTrue(eventMatches(events.get(4), StepFunctionType.SLEEP, StepFunctionEventStatus.STARTED, "1.1.1"));
+            assertTrue(eventMatches(events.get(5), StepFunctionType.SLEEP, StepFunctionEventStatus.COMPLETED, "1.1.1"));
+            assertTrue(eventMatches(events.get(6), StepFunctionType.ACTIVITY, StepFunctionEventStatus.STARTED, "1.1.2"));
+            assertTrue(eventMatches(events.get(7), StepFunctionType.CONDITION, StepFunctionEventStatus.WAITING, "1.1.2.1"));
+            assertTrue(eventMatches(events.get(8), StepFunctionType.CONDITION, StepFunctionEventStatus.SATISFIED, "1.1.2.1"));
+            assertTrue(eventMatches(events.get(9), StepFunctionType.ACTIVITY, StepFunctionEventStatus.COMPLETED, "1.1.2"));
+            assertTrue(eventMatches(events.get(10), StepFunctionType.ACTIVITY, StepFunctionEventStatus.STARTED, "1.1.3"));
+            assertTrue(eventMatches(events.get(11), StepFunctionType.ACTIVITY, StepFunctionEventStatus.COMPLETED, "1.1.3"));
+            assertTrue(eventMatches(events.get(12), StepFunctionType.ACTIVITY, StepFunctionEventStatus.COMPLETED, "1.1"));
+            assertTrue(eventMatches(events.get(13), StepFunctionType.ACTIVITY, StepFunctionEventStatus.COMPLETED, "1"));
+            assertTrue(eventMatches(events.get(14), StepFunctionType.WORKFLOW, StepFunctionEventStatus.COMPLETED));
 
         }
 
@@ -332,15 +333,15 @@ public class AcceptanceTest {
             );
 
             // and the event sequence is correct
-            List<Event> events = aptWorkflow.getWorkflowEvents(workflowId);
+            List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getWorkflowEvents(workflowId);
             assertEquals(7, events.size()); // 3 workflow + 2 for successful activity + 2 for failed activity
-            assertTrue(eventMatches(events.get(0), EventCategory.WORKFLOW, EventStatus.SCHEDULED));
-            assertTrue(eventMatches(events.get(1), EventCategory.WORKFLOW, EventStatus.STARTED));
-            assertTrue(eventMatches(events.get(2), EventCategory.ACTIVITY, EventStatus.STARTED));
-            assertTrue(eventMatches(events.get(3), EventCategory.ACTIVITY, EventStatus.COMPLETED));
-            assertTrue(eventMatches(events.get(4), EventCategory.ACTIVITY, EventStatus.STARTED));
-            assertTrue(eventMatches(events.get(5), EventCategory.ACTIVITY, EventStatus.FAILED));
-            assertTrue(eventMatches(events.get(6), EventCategory.WORKFLOW, EventStatus.FAILED));
+            assertTrue(eventMatches(events.get(0), StepFunctionType.WORKFLOW, StepFunctionEventStatus.SCHEDULED));
+            assertTrue(eventMatches(events.get(1), StepFunctionType.WORKFLOW, StepFunctionEventStatus.STARTED));
+            assertTrue(eventMatches(events.get(2), StepFunctionType.ACTIVITY, StepFunctionEventStatus.STARTED));
+            assertTrue(eventMatches(events.get(3), StepFunctionType.ACTIVITY, StepFunctionEventStatus.COMPLETED));
+            assertTrue(eventMatches(events.get(4), StepFunctionType.ACTIVITY, StepFunctionEventStatus.STARTED));
+            assertTrue(eventMatches(events.get(5), StepFunctionType.ACTIVITY, StepFunctionEventStatus.FAILED));
+            assertTrue(eventMatches(events.get(6), StepFunctionType.WORKFLOW, StepFunctionEventStatus.FAILED));
         }
 
         @Test
@@ -356,13 +357,13 @@ public class AcceptanceTest {
             );
 
             // and the event sequence is correct
-            List<Event> events = aptWorkflow.getWorkflowEvents(workflowId);
+            List<StepFunctionEvent<Integer, String>> events = aptWorkflow.getWorkflowEvents(workflowId);
             assertEquals(5, events.size()); // 3 workflow + 2 for failed activity
-            assertTrue(eventMatches(events.get(0), EventCategory.WORKFLOW, EventStatus.SCHEDULED));
-            assertTrue(eventMatches(events.get(1), EventCategory.WORKFLOW, EventStatus.STARTED));
-            assertTrue(eventMatches(events.get(2), EventCategory.ACTIVITY, EventStatus.STARTED));
-            assertTrue(eventMatches(events.get(3), EventCategory.ACTIVITY, EventStatus.FAILED));
-            assertTrue(eventMatches(events.get(4), EventCategory.WORKFLOW, EventStatus.FAILED));
+            assertTrue(eventMatches(events.get(0), StepFunctionType.WORKFLOW, StepFunctionEventStatus.SCHEDULED));
+            assertTrue(eventMatches(events.get(1), StepFunctionType.WORKFLOW, StepFunctionEventStatus.STARTED));
+            assertTrue(eventMatches(events.get(2), StepFunctionType.ACTIVITY, StepFunctionEventStatus.STARTED));
+            assertTrue(eventMatches(events.get(3), StepFunctionType.ACTIVITY, StepFunctionEventStatus.FAILED));
+            assertTrue(eventMatches(events.get(4), StepFunctionType.WORKFLOW, StepFunctionEventStatus.FAILED));
         }
 
     }

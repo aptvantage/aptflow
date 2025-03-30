@@ -1,8 +1,9 @@
 package aptvantage.aptflow.engine;
 
 import aptvantage.aptflow.api.RunnableWorkflow;
+import aptvantage.aptflow.engine.persistence.StateReader;
 import aptvantage.aptflow.engine.persistence.v1.WorkflowRepository;
-import aptvantage.aptflow.model.v1.WorkflowRun;
+import aptvantage.aptflow.model.WorkflowRun;
 import com.github.kagkarlsson.scheduler.Scheduler;
 import com.github.kagkarlsson.scheduler.task.TaskInstance;
 import com.google.common.flogger.FluentLogger;
@@ -32,12 +33,19 @@ public class WorkflowExecutor {
     private final Set<Object> workflowDependencies;
 
     private final CompleteSleepTask completeSleepTask;
+    private final StateReader stateReader;
     private final ResumeStartedWorkflowTask resumeStartedWorkflowTask;
     private final SignalWorkflowTask signalWorkflowTask;
     private final StartWorkflowTask startWorkflowTask;
 
-    public WorkflowExecutor(DataSource dataSource, WorkflowRepository workflowRepository, Set<Object> workflowDependencies) {
+    public WorkflowExecutor(
+            DataSource dataSource,
+            WorkflowRepository workflowRepository,
+            Set<Object> workflowDependencies,
+            StateReader stateReader
+    ) {
         this.completeSleepTask = new CompleteSleepTask(workflowRepository, this);
+        this.stateReader = stateReader;
         this.resumeStartedWorkflowTask = new ResumeStartedWorkflowTask(this);
         this.startWorkflowTask = new StartWorkflowTask(workflowRepository, this);
         this.signalWorkflowTask = new SignalWorkflowTask(workflowRepository, this);
@@ -87,11 +95,12 @@ public class WorkflowExecutor {
     }
 
     void executeWorkflow(String workflowRunId) {
-        WorkflowRun<Serializable, Serializable> workflowRun = this.workflowRepository.getWorkflowRun(workflowRunId);
+        WorkflowRun workflowRun = stateReader.getWorkflowRun(workflowRunId);
+
         try {
             executionContext.set(new ExecutionContext(workflowRunId));
-            RunnableWorkflow instance = instantiate(workflowRun.workflow().className());
-            Serializable output = instance.execute(workflowRun.workflow().input());
+            RunnableWorkflow instance = instantiate(workflowRun.getWorkflow().getClassName());
+            Serializable output = instance.execute(workflowRun.getWorkflow().getInput());
             this.workflowRepository.workflowRunCompleted(workflowRunId, output);
             logger.atInfo().log("Workflow [%s] is complete", workflowRunId);
         } catch (AwaitingSignalException e) {

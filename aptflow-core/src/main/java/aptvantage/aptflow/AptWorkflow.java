@@ -5,8 +5,8 @@ import aptvantage.aptflow.api.WorkflowFunctions;
 import aptvantage.aptflow.engine.WorkflowExecutor;
 import aptvantage.aptflow.engine.persistence.StateReader;
 import aptvantage.aptflow.engine.persistence.v1.WorkflowRepository;
-import aptvantage.aptflow.model.v1.Event;
-import aptvantage.aptflow.model.v1.WorkflowRunStatus;
+import aptvantage.aptflow.model.StepFunctionEvent;
+import aptvantage.aptflow.model.WorkflowRun;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import org.flywaydb.core.Flyway;
@@ -64,14 +64,13 @@ public class AptWorkflow {
         return stateReader.getActiveRunForWorkflowId(workflowId, workflowClass).getOutput();
     }
 
-    public WorkflowRunStatus getWorkflowStatus(String workflowId) {
-        String workflowRunId = repository.getActiveWorkflowRunId(workflowId);
-        return repository.getWorkflowRunStatus(workflowRunId);
+    public <I extends Serializable, O extends Serializable> WorkflowRun<I, O> getWorkflowStatus(String workflowId) {
+        return stateReader.getActiveRunForWorkflowId(workflowId, null);
     }
 
-    public List<Event> getWorkflowEvents(String workflowId) {
-        String workflowRunId = repository.getActiveWorkflowRunId(workflowId);
-        return repository.getWorkflowEvents(workflowRunId);
+    public <I extends Serializable, O extends Serializable> List<StepFunctionEvent<I, O>> getWorkflowEvents(String workflowId) {
+        WorkflowRun<I, O> activeRun = stateReader.getActiveRunForWorkflowId(workflowId, null);
+        return activeRun.getFunctionEvents();
     }
 
     public void stop() {
@@ -139,7 +138,8 @@ public class AptWorkflow {
             WorkflowExecutor executor = new WorkflowExecutor(
                     this.dataSource,
                     AptWorkflow.repository,
-                    workflowDependencies);
+                    workflowDependencies,
+                    stateReader);
 
             WorkflowFunctions.initialize(executor, stateReader);
 

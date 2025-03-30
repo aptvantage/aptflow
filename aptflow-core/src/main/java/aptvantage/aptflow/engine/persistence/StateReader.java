@@ -29,8 +29,9 @@ public class StateReader {
                                     workflow_run_id,
                                     category,
                                     status,
-                                    timestamp
-                                FROM event
+                                    timestamp,
+                                    function_id
+                                FROM v_workflow_run_event
                                 WHERE id = :id
                                 """)
                         .bind("id", id)
@@ -41,10 +42,12 @@ public class StateReader {
                                         stepFunctionTypeMapper.map(rs, "category", ctx),
                                         stepFunctionEventStatusMapper.map(rs, "status", ctx),
                                         instantColumnMapper.map(rs, "timestamp", ctx),
+                                        rs.getString("function_id"),
                                         this
                                 )
                         )
-                        .one()
+                        .findOne()
+                        .orElse(null)
         );
     }
 
@@ -57,9 +60,11 @@ public class StateReader {
                                     workflow_run_id,
                                     category,
                                     status,
-                                    timestamp
-                                FROM event
+                                    timestamp,
+                                    function_id
+                                FROM v_workflow_run_event
                                 WHERE workflow_run_id = :workflowRunId
+                                ORDER BY timestamp
                                 """)
                         .bind("workflowRunId", workflowRunId)
                         .map((rs, ctx) ->
@@ -69,6 +74,7 @@ public class StateReader {
                                         stepFunctionTypeMapper.map(rs, "category", ctx),
                                         stepFunctionEventStatusMapper.map(rs, "status", ctx),
                                         instantColumnMapper.map(rs, "timestamp", ctx),
+                                        rs.getString("function_id"),
                                         this
                                 )
                         )
@@ -262,6 +268,68 @@ public class StateReader {
 
                         })
                         .collectIntoList()
+        );
+    }
+
+    public <O extends Serializable, I extends Serializable>
+    StepFunction<I, O> getStepFunctionForWorkflowRun(String workflowRunId, String functionId) {
+        return jdbi.withHandle(handle ->
+                handle.createQuery("""
+                                SELECT
+                                    workflow_run_id,
+                                    function_id,
+                                    function_type,
+                                    started_event_id,
+                                    completed_event_id
+                                FROM
+                                    v_workflow_run_step_function
+                                WHERE
+                                    workflow_run_id = :workflowRunId
+                                    AND function_id = :functionId
+                                """)
+                        .bind("workflowRunId", workflowRunId)
+                        .bind("functionId", functionId)
+                        .map((rs, ctx) -> {
+                            StepFunctionType functionType = StepFunctionType.valueOf(rs.getString("function_type"));
+                            StepFunction<I, O> stepFunction = switch (functionType) {
+                                case WORKFLOW -> throw new IllegalStateException("WORKFLOW is not a StepFunction");
+                                case ACTIVITY -> new ActivityFunction<>(
+                                        rs.getString("workflow_run_id"),
+                                        rs.getString("function_id"),
+                                        rs.getString("started_event_id"),
+                                        rs.getString("completed_event_id"),
+                                        null,
+                                        this
+                                );
+                                case CONDITION -> new ConditionFunction<>(
+                                        rs.getString("workflow_run_id"),
+                                        rs.getString("function_id"),
+                                        rs.getString("started_event_id"),
+                                        rs.getString("completed_event_id"),
+                                        this
+                                );
+                                case SIGNAL -> new SignalFunction<>(
+                                        rs.getString("workflow_run_id"),
+                                        rs.getString("function_id"),
+                                        rs.getString("started_event_id"),
+                                        rs.getString("completed_event_id"),
+                                        null,
+                                        this
+                                );
+                                case SLEEP -> new SleepFunction<>(
+                                        rs.getString("workflow_run_id"),
+                                        rs.getString("function_id"),
+                                        rs.getString("started_event_id"),
+                                        rs.getString("completed_event_id"),
+                                        null,
+                                        this
+                                );
+                            };
+                            return stepFunction;
+
+                        })
+                        .findOne()
+                        .orElse(null)
         );
     }
 
