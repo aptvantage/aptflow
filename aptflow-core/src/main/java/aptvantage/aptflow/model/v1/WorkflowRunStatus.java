@@ -1,4 +1,4 @@
-package aptvantage.aptflow.model;
+package aptvantage.aptflow.model.v1;
 
 import java.util.List;
 

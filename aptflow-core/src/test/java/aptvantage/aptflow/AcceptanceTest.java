@@ -1,9 +1,9 @@
 package aptvantage.aptflow;
 
 import aptvantage.aptflow.examples.*;
-import aptvantage.aptflow.model.Event;
-import aptvantage.aptflow.model.EventCategory;
-import aptvantage.aptflow.model.EventStatus;
+import aptvantage.aptflow.model.v1.Event;
+import aptvantage.aptflow.model.v1.EventCategory;
+import aptvantage.aptflow.model.v1.EventStatus;
 import org.awaitility.Awaitility;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.parallel.Execution;

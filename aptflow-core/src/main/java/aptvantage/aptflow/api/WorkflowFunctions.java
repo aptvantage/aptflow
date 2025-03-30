@@ -2,10 +2,10 @@ package aptvantage.aptflow.api;
 
 import aptvantage.aptflow.AptWorkflow;
 import aptvantage.aptflow.engine.*;
-import aptvantage.aptflow.model.Activity;
-import aptvantage.aptflow.model.Condition;
-import aptvantage.aptflow.model.Signal;
-import aptvantage.aptflow.model.Sleep;
+import aptvantage.aptflow.model.v1.Activity;
+import aptvantage.aptflow.model.v1.Condition;
+import aptvantage.aptflow.model.v1.Signal;
+import aptvantage.aptflow.model.v1.Sleep;
 import com.google.common.flogger.FluentLogger;
 
 import java.io.Serializable;

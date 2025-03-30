@@ -3,9 +3,10 @@ package aptvantage.aptflow;
 import aptvantage.aptflow.api.RunnableWorkflow;
 import aptvantage.aptflow.api.WorkflowFunctions;
 import aptvantage.aptflow.engine.WorkflowExecutor;
-import aptvantage.aptflow.engine.persistence.WorkflowRepository;
-import aptvantage.aptflow.model.Event;
-import aptvantage.aptflow.model.WorkflowRunStatus;
+import aptvantage.aptflow.engine.persistence.StateReader;
+import aptvantage.aptflow.engine.persistence.v1.WorkflowRepository;
+import aptvantage.aptflow.model.v1.Event;
+import aptvantage.aptflow.model.v1.WorkflowRunStatus;
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
 import org.flywaydb.core.Flyway;
@@ -123,8 +124,11 @@ public class AptWorkflow {
         public AptWorkflow start() {
             //TODO -- null check this.dataSource
             runDatabaseMigration(this.dataSource);
+            Jdbi jdbi = Jdbi.create(this.dataSource);
+            AptWorkflow.repository = new WorkflowRepository(jdbi);
 
-            AptWorkflow.repository = new WorkflowRepository(Jdbi.create(this.dataSource));
+            StateReader stateReader = new StateReader(jdbi);
+
             WorkflowExecutor executor = new WorkflowExecutor(
                     this.dataSource,
                     AptWorkflow.repository,

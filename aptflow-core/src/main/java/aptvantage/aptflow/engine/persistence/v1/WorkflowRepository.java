@@ -1,7 +1,7 @@
-package aptvantage.aptflow.engine.persistence;
+package aptvantage.aptflow.engine.persistence.v1;
 
 import aptvantage.aptflow.api.RunnableWorkflow;
-import aptvantage.aptflow.model.*;
+import aptvantage.aptflow.model.v1.*;
 import org.jdbi.v3.core.Handle;
 import org.jdbi.v3.core.Jdbi;
 import org.jdbi.v3.core.mapper.ColumnMapper;
@@ -26,7 +26,9 @@ public class WorkflowRepository {
     private final EventCategoryMapper eventCategoryColumnMapper = new EventCategoryMapper();
     private final EventStatusMapper eventStatusColumnMapper = new EventStatusMapper();
 
-    public WorkflowRepository(Jdbi jdbi) {
+    public WorkflowRepository(
+            Jdbi jdbi
+    ) {
         this.jdbi = jdbi;
     }
 

@@ -1,6 +1,6 @@
 package aptvantage.aptflow.engine;
 
-import aptvantage.aptflow.engine.persistence.WorkflowRepository;
+import aptvantage.aptflow.engine.persistence.v1.WorkflowRepository;
 import com.github.kagkarlsson.scheduler.task.ExecutionContext;
 import com.github.kagkarlsson.scheduler.task.TaskInstance;
 import com.github.kagkarlsson.scheduler.task.helper.OneTimeTask;

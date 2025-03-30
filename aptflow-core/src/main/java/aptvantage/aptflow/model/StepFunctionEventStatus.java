@@ -1,6 +1,6 @@
 package aptvantage.aptflow.model;
 
-public enum EventStatus {
+public enum StepFunctionEventStatus {
     STARTED, COMPLETED, FAILED, RECEIVED, WAITING, SCHEDULED, SATISFIED;
 
     boolean isTerminal() {
