@@ -24,10 +24,16 @@ public class AptWorkflow {
     public static WorkflowRepository repository;
     private final WorkflowExecutor workflowExecutor;
     private final AptWorkflowBuilder builder;
+    private final StateReader stateReader;
 
-    private AptWorkflow(WorkflowExecutor workflowExecutor, AptWorkflowBuilder builder) {
+    private AptWorkflow(
+            WorkflowExecutor workflowExecutor,
+            AptWorkflowBuilder builder,
+            StateReader stateReader
+    ) {
         this.workflowExecutor = workflowExecutor;
         this.builder = builder;
+        this.stateReader = stateReader;
     }
 
     public static AptWorkflowBuilder builder() {
@@ -53,9 +59,9 @@ public class AptWorkflow {
     //TODO -- reRunWorkflowFromFailed
 
 
-    public <O extends Serializable> O getWorkflowOutput(String workflowId, Class<? extends RunnableWorkflow<? extends Serializable, O>> workflowClass) {
-        String workflowRunId = repository.getActiveWorkflowRunId(workflowId);
-        return repository.getWorkflowRun(workflowRunId, workflowClass).output();
+    public <I extends Serializable, O extends Serializable>
+    O getWorkflowOutput(String workflowId, Class<? extends RunnableWorkflow<I, O>> workflowClass) {
+        return stateReader.getActiveRunForWorkflowId(workflowId, workflowClass).getOutput();
     }
 
     public WorkflowRunStatus getWorkflowStatus(String workflowId) {
@@ -139,7 +145,7 @@ public class AptWorkflow {
 
             // start this (last) after the rest of the app is completely initialized
             executor.start();
-            return new AptWorkflow(executor, this);
+            return new AptWorkflow(executor, this, stateReader);
         }
 
 

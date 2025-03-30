@@ -1,5 +1,6 @@
 package aptvantage.aptflow.engine.persistence;
 
+import aptvantage.aptflow.api.RunnableWorkflow;
 import aptvantage.aptflow.model.*;
 import org.jdbi.v3.core.Jdbi;
 
@@ -285,7 +286,7 @@ public class StateReader {
     }
 
     public <I extends Serializable, O extends Serializable>
-    WorkflowRun<I, O> getActiveRunForWorkflowId(String workflowId) {
+    WorkflowRun<I, O> getActiveRunForWorkflowId(String workflowId, Class<? extends RunnableWorkflow<I, O>> workflowClass) {
         return (WorkflowRun<I, O>) getRunsForWorkflow(workflowId)
                 .stream()
                 .filter(run -> run.getArchived() == null)
@@ -314,7 +315,7 @@ public class StateReader {
                         .map((rs, ctx) ->
                                 new WorkflowRun<I, O>(
                                         rs.getString("id"),
-                                        rs.getString("workflow_run_id"),
+                                        rs.getString("workflow_id"),
                                         rs.getString("scheduled_event_id"),
                                         rs.getString("started_event_id"),
                                         rs.getString("completed_event_id"),
