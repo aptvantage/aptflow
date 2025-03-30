@@ -19,7 +19,8 @@ public class StateReader {
         this.jdbi = jdbi;
     }
 
-    public <I extends Serializable, O extends Serializable> StepFunctionEvent<I, O> getStepFunctionEvent(String id) {
+    public <I extends Serializable, O extends Serializable>
+    StepFunctionEvent<I, O> getStepFunctionEvent(String id) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
                                 SELECT
@@ -46,7 +47,8 @@ public class StateReader {
         );
     }
 
-    public <I extends Serializable, O extends Serializable> List<StepFunctionEvent<I, O>> getStepFunctionEventsForWorkflowRun(String workflowRunId) {
+    public <I extends Serializable, O extends Serializable>
+    List<StepFunctionEvent<I, O>> getStepFunctionEventsForWorkflowRun(String workflowRunId) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
                                 SELECT
@@ -73,11 +75,8 @@ public class StateReader {
         );
     }
 
-    public <I extends Serializable, O extends Serializable, A extends Serializable> ActivityFunction<I, O, A>
-    getActivityFunction(
-            String workflowRunId,
-            String name
-    ) {
+    public <I extends Serializable, O extends Serializable, A extends Serializable>
+    ActivityFunction<I, O, A> getActivityFunction(String workflowRunId, String name) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
                                 SELECT 
@@ -103,15 +102,14 @@ public class StateReader {
                                         this
                                 )
                         )
-                        .one()
+                        .findOne()
+                        .orElse(null)
 
         );
     }
 
-    public <I extends Serializable, O extends Serializable> SleepFunction<I, O>
-    getSleepFunction(
-            String workflowRunId, String identifier
-    ) {
+    public <I extends Serializable, O extends Serializable>
+    SleepFunction<I, O> getSleepFunction(String workflowRunId, String identifier) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
                                 SELECT 
@@ -143,9 +141,39 @@ public class StateReader {
         );
     }
 
-    public <I extends Serializable, O extends Serializable> List<StepFunction<I, O>> getFunctionsForWorkflowRun(
-            String workflowRunId
-    ) {
+    public <I extends Serializable, O extends Serializable>
+    ConditionFunction<I, O> getConditionFunction(String workflowRunId, String identifier) {
+        return jdbi.withHandle(handle ->
+                handle.createQuery("""
+                                SELECT 
+                                    workflow_run_id,
+                                    identifier,
+                                    waiting_event_id,
+                                    satisfied_event_id
+                                FROM "condition"
+                                WHERE 
+                                    workflow_run_id = :workflowRunId
+                                    AND identifier = :identifier
+                                """)
+                        .bind("workflowRunId", workflowRunId)
+                        .bind("identifier", identifier)
+                        .map((rs, ctx) ->
+                                new ConditionFunction<I, O>(
+                                        rs.getString("workflow_run_id"),
+                                        rs.getString("identifier"),
+                                        rs.getString("waiting_event_id"),
+                                        rs.getString("satisfied_event_id"),
+                                        this
+                                )
+                        )
+                        .findOne()
+                        .orElse(null)
+
+        );
+    }
+
+    public <I extends Serializable, O extends Serializable>
+    List<StepFunction<I, O>> getFunctionsForWorkflowRun(String workflowRunId) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
                                 SELECT
@@ -203,7 +231,8 @@ public class StateReader {
         );
     }
 
-    public <I extends Serializable, O extends Serializable> Workflow<I, O> getWorkflow(String id) {
+    public <I extends Serializable, O extends Serializable>
+    Workflow<I, O> getWorkflow(String id) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
                                 SELECT id, class_name, input
@@ -222,7 +251,8 @@ public class StateReader {
         );
     }
 
-    public <I extends Serializable, O extends Serializable> WorkflowRun<I, O> getActiveRunForWorkflowId(String workflowId) {
+    public <I extends Serializable, O extends Serializable>
+    WorkflowRun<I, O> getActiveRunForWorkflowId(String workflowId) {
         return (WorkflowRun<I, O>) getRunsForWorkflow(workflowId)
                 .stream()
                 .filter(run -> run.getArchived() == null)
@@ -230,7 +260,8 @@ public class StateReader {
                 .orElse(null);
     }
 
-    public <I extends Serializable, O extends Serializable> List<WorkflowRun<I, O>> getRunsForWorkflow(String workflowId) {
+    public <I extends Serializable, O extends Serializable>
+    List<WorkflowRun<I, O>> getRunsForWorkflow(String workflowId) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
                                 SELECT 
@@ -280,7 +311,8 @@ public class StateReader {
 //        }
 //    }
 
-    public <O extends Serializable, I extends Serializable> WorkflowRun<I, O> getWorkflowRun(String id) {
+    public <O extends Serializable, I extends Serializable>
+    WorkflowRun<I, O> getWorkflowRun(String id) {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
                                 SELECT 

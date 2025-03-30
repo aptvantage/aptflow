@@ -51,4 +51,8 @@ public class ConditionFunction<I extends Serializable, O extends Serializable> i
     public StepFunctionEvent<I, O> getCompletedEvent() {
         return stateReader.getStepFunctionEvent(satisfiedEventId);
     }
+
+    public boolean isSatisfied() {
+        return satisfiedEventId != null;
+    }
 }

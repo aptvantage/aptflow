@@ -567,49 +567,6 @@ public class WorkflowRepository {
         });
     }
 
-    public Condition getCondition(String workflowRunId, String identifier) {
-        return jdbi.withHandle(handle ->
-                handle.createQuery("""
-                                SELECT
-                                    c.workflow_run_id AS c_workflow_run_id,
-                                    c.identifier AS c_identifier,
-                                    waiting.timestamp AS waiting_timestamp,
-                                    waiting.category AS waiting_category,
-                                    waiting.status AS waiting_status,
-                                    satisfied.timestamp AS satisfied_timestamp,
-                                    satisfied.category AS satisfied_category,
-                                    satisfied.status AS satisfied_status
-                                FROM "condition" c
-                                  LEFT JOIN event waiting
-                                    ON c.waiting_event_id = waiting.id
-                                  LEFT JOIN event satisfied
-                                    ON c.satisfied_event_id = satisfied.id
-                                WHERE c.workflow_run_id = :workflowRunId
-                                    AND c.identifier = :identifier
-                                """)
-                        .bind("workflowRunId", workflowRunId)
-                        .bind("identifier", identifier)
-                        .map((rs, ctx) ->
-                                new Condition(
-                                        rs.getString("c_workflow_run_id"),
-                                        rs.getString("c_identifier"),
-                                        new Event(
-                                                eventCategoryColumnMapper.map(rs, "waiting_category", ctx),
-                                                eventStatusColumnMapper.map(rs, "waiting_status", ctx),
-                                                rs.getString("c_identifier"),
-                                                instantColumnMapper.map(rs, "waiting_timestamp", ctx)
-                                        ),
-                                        new Event(
-                                                eventCategoryColumnMapper.map(rs, "satisfied_category", ctx),
-                                                eventStatusColumnMapper.map(rs, "satisfied_status", ctx),
-                                                rs.getString("c_identifier"),
-                                                instantColumnMapper.map(rs, "satisfied_timestamp", ctx)
-                                        )
-                                ))
-                        .findOne()
-                        .orElse(null));
-    }
-
     public void newSleepStarted(String workflowRunId, String identifier, Duration duration) {
         jdbi.useTransaction(handle -> {
             String eventId = newEvent(handle, workflowRunId, EventCategory.SLEEP, EventStatus.STARTED);

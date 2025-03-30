@@ -3,9 +3,9 @@ package aptvantage.aptflow.api;
 import aptvantage.aptflow.AptWorkflow;
 import aptvantage.aptflow.engine.*;
 import aptvantage.aptflow.engine.persistence.StateReader;
+import aptvantage.aptflow.model.ConditionFunction;
 import aptvantage.aptflow.model.SleepFunction;
 import aptvantage.aptflow.model.v1.Activity;
-import aptvantage.aptflow.model.v1.Condition;
 import aptvantage.aptflow.model.v1.Signal;
 import com.google.common.flogger.FluentLogger;
 
@@ -65,8 +65,8 @@ public class WorkflowFunctions {
         String workflowRunId = workflowExecutor.getExecutionContext().workflowRunId();
         String conditionKey = "condition::%s::%s".formatted(workflowRunId, conditionIdentifier);
         logger.atFine().log("processing condition [%s]", conditionKey);
-        Condition condition = initializeCondition(workflowRunId, conditionIdentifier);
-        if (condition.isSatisfied()) {
+        ConditionFunction<? extends Serializable, ? extends Serializable> conditionFunction = initializeCondition(workflowRunId, conditionIdentifier);
+        if (conditionFunction.isSatisfied()) {
             logger.atInfo().log("skipping previously satisfied condition [%s]", conditionKey);
             return;
         }
@@ -83,13 +83,14 @@ public class WorkflowFunctions {
 
     }
 
-    private Condition initializeCondition(String workflowRunId, String conditionIdentifier) {
-        Condition condition = AptWorkflow.repository.getCondition(workflowRunId, conditionIdentifier);
-        if (condition == null) {
+    private <I extends Serializable, O extends Serializable>
+    ConditionFunction<I, O> initializeCondition(String workflowRunId, String conditionIdentifier) {
+        ConditionFunction<I, O> conditionFunction = stateReader.getConditionFunction(workflowRunId, conditionIdentifier);
+        if (conditionFunction == null) {
             AptWorkflow.repository.newConditionWaiting(workflowRunId, conditionIdentifier);
-            condition = AptWorkflow.repository.getCondition(workflowRunId, conditionIdentifier);
+            conditionFunction = stateReader.getConditionFunction(workflowRunId, conditionIdentifier);
         }
-        return condition;
+        return conditionFunction;
     }
 
     private void _sleep(String identifier, Duration duration) {
