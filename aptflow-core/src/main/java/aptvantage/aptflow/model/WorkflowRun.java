@@ -48,7 +48,7 @@ public class WorkflowRun<I extends Serializable, O extends Serializable> {
     }
 
     public Workflow<I, O> getWorkflow() {
-        return stateReader.getWorkflow(workflowId);
+        return stateReader.getWorkflow(workflowId, null);
     }
 
     public O getOutput() {
