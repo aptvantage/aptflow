@@ -62,10 +62,6 @@ public class ActivityFunction<I extends Serializable, O extends Serializable, A 
         return output;
     }
 
-    public boolean isCompleted() {
-        return this.completedEventId != null;
-    }
-
     public String getKey() {
         return "%s::%s".formatted(workflowRunId, name);
     }

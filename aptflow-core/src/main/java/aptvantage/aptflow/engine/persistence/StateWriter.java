@@ -1,9 +1,7 @@
 package aptvantage.aptflow.engine.persistence;
 
 import aptvantage.aptflow.api.RunnableWorkflow;
-import aptvantage.aptflow.model.StepFunctionEventStatus;
-import aptvantage.aptflow.model.StepFunctionType;
-import aptvantage.aptflow.model.WorkflowRun;
+import aptvantage.aptflow.model.*;
 import org.jdbi.v3.core.Handle;
 import org.jdbi.v3.core.Jdbi;
 
@@ -29,7 +27,13 @@ public class StateWriter {
         this.stateReader = stateReader;
     }
 
-    private static String newEvent(Handle handle, String workflowRunId, StepFunctionType type, StepFunctionEventStatus status) {
+    private static String newEvent(
+            Handle handle,
+            String workflowRunId,
+            StepFunctionType type,
+            StepFunctionEventStatus status,
+            Instant timestamp
+    ) {
         String eventId = UUID.randomUUID().toString();
         handle.createUpdate("""
                         INSERT INTO event (id, workflow_run_id, category, status, timestamp)
@@ -39,28 +43,32 @@ public class StateWriter {
                 .bind("workflow_run_id", workflowRunId)
                 .bind("category", type)
                 .bind("status", status)
-                .bind("timestamp", Instant.now())
+                .bind("timestamp", timestamp)
                 .execute();
         return eventId;
     }
 
-    public void newActivityStarted(String workflowRunId, String name) {
+    public void newActivityStarted(String workflowRunId, String name, Instant timestamp) {
         jdbi.useTransaction(handle -> {
-            String eventId = newEvent(handle, workflowRunId, StepFunctionType.ACTIVITY, StepFunctionEventStatus.STARTED);
-            handle.createUpdate("""
-                            INSERT INTO activity(workflow_run_id, name, started_event_id)
-                            VALUES (:workflowRunId, :name, :eventId)
-                            """)
-                    .bind("workflowRunId", workflowRunId)
-                    .bind("name", name)
-                    .bind("eventId", eventId)
-                    .execute();
+            newActivityStarted(handle, workflowRunId, name, timestamp);
         });
     }
 
-    public void failActivity(String workflowRunId, String name) {
+    public void newActivityStarted(Handle handle, String workflowRunId, String name, Instant timestamp) {
+        String eventId = newEvent(handle, workflowRunId, StepFunctionType.ACTIVITY, StepFunctionEventStatus.STARTED, timestamp);
+        handle.createUpdate("""
+                        INSERT INTO activity(workflow_run_id, name, started_event_id)
+                        VALUES (:workflowRunId, :name, :eventId)
+                        """)
+                .bind("workflowRunId", workflowRunId)
+                .bind("name", name)
+                .bind("eventId", eventId)
+                .execute();
+    }
+
+    public void failActivity(String workflowRunId, String name, Instant timestamp) {
         jdbi.useTransaction(handle -> {
-            String eventId = newEvent(handle, workflowRunId, StepFunctionType.ACTIVITY, StepFunctionEventStatus.FAILED);
+            String eventId = newEvent(handle, workflowRunId, StepFunctionType.ACTIVITY, StepFunctionEventStatus.FAILED, timestamp);
 
             handle.createUpdate("""
                             UPDATE activity
@@ -75,64 +83,75 @@ public class StateWriter {
         });
     }
 
-    public void completeActivity(String workflowRunId, String name, Serializable output) {
+    public void completeActivity(String workflowRunId, String name, Serializable output, Instant timestamp) {
         jdbi.useTransaction(handle -> {
-            String eventId = newEvent(handle, workflowRunId, StepFunctionType.ACTIVITY, StepFunctionEventStatus.COMPLETED);
-
-            handle.createUpdate("""
-                            UPDATE activity
-                            SET output = :output,
-                                completed_event_id = :eventId
-                            WHERE workflow_run_id = :workflowRunId and name = :name
-                            """)
-                    .bind("workflowRunId", workflowRunId)
-                    .bind("name", name)
-                    .bind("eventId", eventId)
-                    .bind("output", serialize(output))
-                    .execute();
-        });
-
-    }
-
-    public void newSignalWaiting(String workflowRunId, String name) {
-        jdbi.useTransaction(handle -> {
-
-            String eventId = newEvent(handle, workflowRunId, StepFunctionType.SIGNAL, StepFunctionEventStatus.WAITING);
-
-            handle.createUpdate("""
-                            INSERT INTO signal(workflow_run_id, name, waiting_event_id)
-                            VALUES (:workflowRunId, :name, :eventId)
-                            """)
-                    .bind("workflowRunId", workflowRunId)
-                    .bind("name", name)
-                    .bind("eventId", eventId)
-                    .execute();
+            completeActivity(handle, workflowRunId, name, output, timestamp);
         });
     }
 
-    public void signalReceived(String workflowRunId, String name, Serializable value) {
+    public void completeActivity(Handle handle, String workflowRunId, String name, Serializable output, Instant timestamp) {
+        String eventId = newEvent(handle, workflowRunId, StepFunctionType.ACTIVITY, StepFunctionEventStatus.COMPLETED, timestamp);
+
+        handle.createUpdate("""
+                        UPDATE activity
+                        SET output = :output,
+                            completed_event_id = :eventId
+                        WHERE workflow_run_id = :workflowRunId and name = :name
+                        """)
+                .bind("workflowRunId", workflowRunId)
+                .bind("name", name)
+                .bind("eventId", eventId)
+                .bind("output", serialize(output))
+                .execute();
+    }
+
+    public void newSignalWaiting(String workflowRunId, String name, Instant timestamp) {
         jdbi.useTransaction(handle -> {
-
-            String eventId = newEvent(handle, workflowRunId, StepFunctionType.SIGNAL, StepFunctionEventStatus.RECEIVED);
-
-            handle.createUpdate("""
-                            UPDATE signal
-                            SET value = :value,
-                                received_event_id = :eventId
-                            WHERE workflow_run_id = :workflowRunId and name = :name
-                            """)
-                    .bind("workflowRunId", workflowRunId)
-                    .bind("name", name)
-                    .bind("eventId", eventId)
-                    .bind("value", serialize(value))
-                    .execute();
+            newSignalWaiting(handle, workflowRunId, name, timestamp);
         });
     }
 
-    public String scheduleNewRunForExistingWorkflow(String workflowId) {
-        WorkflowRun workflowRun = stateReader.getActiveRunForWorkflowId(workflowId, null);
+    public void newSignalWaiting(Handle handle, String workflowRunId, String name, Instant timestamp) {
+        String eventId = newEvent(handle, workflowRunId, StepFunctionType.SIGNAL, StepFunctionEventStatus.WAITING, Instant.now());
 
-        AtomicReference<String> newRunId = new AtomicReference<>();
+        handle.createUpdate("""
+                        INSERT INTO signal(workflow_run_id, name, waiting_event_id)
+                        VALUES (:workflowRunId, :name, :eventId)
+                        """)
+                .bind("workflowRunId", workflowRunId)
+                .bind("name", name)
+                .bind("eventId", eventId)
+                .execute();
+    }
+
+    public void signalReceived(String workflowRunId, String name, Serializable value, Instant timestamp) {
+        jdbi.useTransaction(handle -> {
+            signalReceived(handle, workflowRunId, name, value, timestamp);
+        });
+    }
+
+    public void signalReceived(Handle handle, String workflowRunId, String name, Serializable value, Instant timestamp) {
+        String eventId = newEvent(handle, workflowRunId, StepFunctionType.SIGNAL, StepFunctionEventStatus.RECEIVED, timestamp);
+
+        handle.createUpdate("""
+                        UPDATE signal
+                        SET value = :value,
+                            received_event_id = :eventId
+                        WHERE workflow_run_id = :workflowRunId and name = :name
+                        """)
+                .bind("workflowRunId", workflowRunId)
+                .bind("name", name)
+                .bind("eventId", eventId)
+                .bind("value", serialize(value))
+                .execute();
+    }
+
+    public String scheduleNewRunForExistingWorkflow(String workflowId, boolean resumeFromPointOfFailure) {
+        // TODO - test this should fail if workflow does not exist
+        // TODO - test this should fail if existing workflow's latest run is not in a terminal state
+        WorkflowRun<Serializable, Serializable> currentRun = stateReader.getActiveRunForWorkflowId(workflowId, null);
+
+        AtomicReference<String> nextRunId = new AtomicReference<>();
         jdbi.useTransaction(handle -> {
             // archive existing run
             handle.createUpdate("""
@@ -141,14 +160,49 @@ public class StateWriter {
                             WHERE id = :activeRunId
                             """)
                     .bind("archived", Instant.now())
-                    .bind("activeRunId", workflowRun.getId())
+                    .bind("activeRunId", currentRun.getId())
                     .execute();
 
             //schedule new run
-            newRunId.set(scheduleWorkflowRun(workflowId, workflowClassFromClassName(workflowRun.getWorkflow().getClassName()), handle));
+            nextRunId.set(scheduleWorkflowRun(workflowId, workflowClassFromClassName(currentRun.getWorkflow().getClassName()), handle));
+
+            if (resumeFromPointOfFailure) {
+                // copy "unfailed" events from current run to next run
+                currentRun.getFunctions()
+                        .stream()
+                        .filter(step -> !step.hasFailed())
+                        .forEach(step -> {
+                            StepFunctionType stepType = step.getStepFunctionType();
+                            switch (stepType) {
+                                case WORKFLOW -> {
+                                    throw new IllegalStateException("WORKFLOW is not a StepFunction");
+                                }
+                                case ACTIVITY -> {
+                                    ActivityFunction currentActivity = (ActivityFunction) step;
+                                    newActivityStarted(handle, nextRunId.get(), currentActivity.getName(), currentActivity.getStartedEvent().getTimestamp());
+                                    completeActivity(handle, nextRunId.get(), currentActivity.getName(), currentActivity.getOutput(), currentActivity.getCompletedEvent().getTimestamp());
+                                }
+                                case CONDITION -> {
+                                    newConditionWaiting(handle, nextRunId.get(), step.getId(), step.getStartedEvent().getTimestamp());
+                                    conditionSatisfied(handle, nextRunId.get(), step.getId(), step.getCompletedEvent().getTimestamp());
+                                }
+                                case SIGNAL -> {
+                                    SignalFunction currentSignal = (SignalFunction) step;
+                                    newSignalWaiting(handle, nextRunId.get(), step.getId(), step.getStartedEvent().getTimestamp());
+                                    signalReceived(handle, nextRunId.get(), step.getId(), currentSignal.getValue(), step.getCompletedEvent().getTimestamp());
+                                }
+                                case SLEEP -> {
+                                    SleepFunction currentSleep = (SleepFunction) step;
+                                    newSleepStarted(handle, nextRunId.get(), step.getId(), currentSleep.getDuration(), step.getStartedEvent().getTimestamp());
+                                    sleepCompleted(handle, nextRunId.get(), step.getId(), step.getCompletedEvent().getTimestamp());
+                                }
+                            }
+                        });
+            }
+
         });
 
-        return newRunId.get();
+        return nextRunId.get();
 
     }
 
@@ -176,24 +230,27 @@ public class StateWriter {
 
     }
 
-    public void workflowRunStarted(String workflowRunId) {
+    public void workflowRunStarted(String workflowRunId, Instant timestamp) {
         jdbi.useTransaction(handle -> {
-
-            String eventId = newEvent(handle, workflowRunId, StepFunctionType.WORKFLOW, StepFunctionEventStatus.STARTED);
-
-            handle.createUpdate("""
-                            UPDATE workflow_run
-                            SET started_event_id = :eventId
-                            WHERE id = :workflowRunId""")
-                    .bind("eventId", eventId)
-                    .bind("workflowRunId", workflowRunId)
-                    .execute();
+            workflowRunStarted(handle, workflowRunId, timestamp);
         });
     }
 
-    public void workflowRunCompleted(String workflowRunId, Object output) {
+    public void workflowRunStarted(Handle handle, String workflowRunId, Instant timestamp) {
+        String eventId = newEvent(handle, workflowRunId, StepFunctionType.WORKFLOW, StepFunctionEventStatus.STARTED, timestamp);
+
+        handle.createUpdate("""
+                        UPDATE workflow_run
+                        SET started_event_id = :eventId
+                        WHERE id = :workflowRunId""")
+                .bind("eventId", eventId)
+                .bind("workflowRunId", workflowRunId)
+                .execute();
+    }
+
+    public void workflowRunCompleted(String workflowRunId, Object output, Instant timestamp) {
         jdbi.useTransaction(handle -> {
-            String eventId = newEvent(handle, workflowRunId, StepFunctionType.WORKFLOW, StepFunctionEventStatus.COMPLETED);
+            String eventId = newEvent(handle, workflowRunId, StepFunctionType.WORKFLOW, StepFunctionEventStatus.COMPLETED, timestamp);
 
             handle.createUpdate("""
                             UPDATE workflow_run
@@ -208,9 +265,9 @@ public class StateWriter {
         });
     }
 
-    public void failWorkflowRun(String workflowRunId) {
+    public void failWorkflowRun(String workflowRunId, Instant timestamp) {
         jdbi.useTransaction(handle -> {
-            String eventId = newEvent(handle, workflowRunId, StepFunctionType.WORKFLOW, StepFunctionEventStatus.FAILED);
+            String eventId = newEvent(handle, workflowRunId, StepFunctionType.WORKFLOW, StepFunctionEventStatus.FAILED, timestamp);
 
             handle.createUpdate("""
                             UPDATE workflow_run
@@ -223,67 +280,81 @@ public class StateWriter {
         });
     }
 
-    public void newConditionWaiting(String workflowRunId, String identifier) {
+    public void newConditionWaiting(String workflowRunId, String identifier, Instant timestamp) {
         jdbi.useTransaction(handle -> {
-            String eventId = newEvent(handle, workflowRunId, StepFunctionType.CONDITION, StepFunctionEventStatus.WAITING);
-            handle.createUpdate("""
-                            INSERT INTO "condition"(workflow_run_id, identifier, waiting_event_id)
-                            VALUES (:workflowRunId, :identifier, :eventId)
-                            """)
-                    .bind("workflowRunId", workflowRunId)
-                    .bind("identifier", identifier)
-                    .bind("eventId", eventId)
-                    .execute();
+            newConditionWaiting(handle, workflowRunId, identifier, timestamp);
         });
     }
 
-    public void conditionSatisfied(String workflowRunId, String identifier) {
+    public void newConditionWaiting(Handle handle, String workflowRunId, String identifier, Instant timestamp) {
+        String eventId = newEvent(handle, workflowRunId, StepFunctionType.CONDITION, StepFunctionEventStatus.WAITING, timestamp);
+        handle.createUpdate("""
+                        INSERT INTO "condition"(workflow_run_id, identifier, waiting_event_id)
+                        VALUES (:workflowRunId, :identifier, :eventId)
+                        """)
+                .bind("workflowRunId", workflowRunId)
+                .bind("identifier", identifier)
+                .bind("eventId", eventId)
+                .execute();
+    }
+
+    public void conditionSatisfied(String workflowRunId, String identifier, Instant timestamp) {
         jdbi.useTransaction(handle -> {
-            String eventId = newEvent(handle, workflowRunId, StepFunctionType.CONDITION, StepFunctionEventStatus.SATISFIED);
-
-            handle.createUpdate("""
-                            UPDATE "condition"
-                            SET satisfied_event_id = :eventId
-                            WHERE workflow_run_id = :workflowRunId
-                                AND identifier = :identifier""")
-                    .bind("eventId", eventId)
-                    .bind("identifier", identifier)
-                    .bind("workflowRunId", workflowRunId)
-                    .execute();
-
+            conditionSatisfied(handle, workflowRunId, identifier, timestamp);
         });
     }
 
-    public void newSleepStarted(String workflowRunId, String identifier, Duration duration) {
+    public void conditionSatisfied(Handle handle, String workflowRunId, String identifier, Instant timestamp) {
+        String eventId = newEvent(handle, workflowRunId, StepFunctionType.CONDITION, StepFunctionEventStatus.SATISFIED, timestamp);
+
+        handle.createUpdate("""
+                        UPDATE "condition"
+                        SET satisfied_event_id = :eventId
+                        WHERE workflow_run_id = :workflowRunId
+                            AND identifier = :identifier""")
+                .bind("eventId", eventId)
+                .bind("identifier", identifier)
+                .bind("workflowRunId", workflowRunId)
+                .execute();
+    }
+
+    public void newSleepStarted(String workflowRunId, String identifier, Duration duration, Instant timestamp) {
         jdbi.useTransaction(handle -> {
-            String eventId = newEvent(handle, workflowRunId, StepFunctionType.SLEEP, StepFunctionEventStatus.STARTED);
-            handle.createUpdate("""
-                            INSERT INTO sleep(workflow_run_id, identifier, duration_in_millis, started_event_id)
-                            VALUES (:workflowRunId, :identifier, :durationInMillis, :eventId)
-                            """)
-                    .bind("workflowRunId", workflowRunId)
-                    .bind("identifier", identifier)
-                    .bind("durationInMillis", duration.toMillis())
-                    .bind("eventId", eventId)
-                    .execute();
+            newSleepStarted(handle, workflowRunId, identifier, duration, timestamp);
         });
     }
 
-    public void sleepCompleted(String workflowRunId, String identifier) {
+    public void newSleepStarted(Handle handle, String workflowRunId, String identifier, Duration duration, Instant timestamp) {
+        String eventId = newEvent(handle, workflowRunId, StepFunctionType.SLEEP, StepFunctionEventStatus.STARTED, timestamp);
+        handle.createUpdate("""
+                        INSERT INTO sleep(workflow_run_id, identifier, duration_in_millis, started_event_id)
+                        VALUES (:workflowRunId, :identifier, :durationInMillis, :eventId)
+                        """)
+                .bind("workflowRunId", workflowRunId)
+                .bind("identifier", identifier)
+                .bind("durationInMillis", duration.toMillis())
+                .bind("eventId", eventId)
+                .execute();
+    }
+
+    public void sleepCompleted(String workflowRunId, String identifier, Instant timestamp) {
         jdbi.useTransaction(handle -> {
-            String eventId = newEvent(handle, workflowRunId, StepFunctionType.SLEEP, StepFunctionEventStatus.COMPLETED);
-
-            handle.createUpdate("""
-                            UPDATE sleep
-                            SET completed_event_id = :eventId
-                            WHERE workflow_run_id = :workflowRunId
-                                AND identifier = :identifier""")
-                    .bind("eventId", eventId)
-                    .bind("identifier", identifier)
-                    .bind("workflowRunId", workflowRunId)
-                    .execute();
-
+            sleepCompleted(handle, workflowRunId, identifier, timestamp);
         });
+    }
+
+    public void sleepCompleted(Handle handle, String workflowRunId, String identifier, Instant timestamp) {
+        String eventId = newEvent(handle, workflowRunId, StepFunctionType.SLEEP, StepFunctionEventStatus.COMPLETED, timestamp);
+
+        handle.createUpdate("""
+                        UPDATE sleep
+                        SET completed_event_id = :eventId
+                        WHERE workflow_run_id = :workflowRunId
+                            AND identifier = :identifier""")
+                .bind("eventId", eventId)
+                .bind("identifier", identifier)
+                .bind("workflowRunId", workflowRunId)
+                .execute();
     }
 
     private byte[] serialize(Object obj) {
@@ -332,7 +403,7 @@ public class StateWriter {
                 .bind("workflowId", workflowId)
                 .execute();
 
-        String eventId = newEvent(handle, workflowRunId, StepFunctionType.WORKFLOW, StepFunctionEventStatus.SCHEDULED);
+        String eventId = newEvent(handle, workflowRunId, StepFunctionType.WORKFLOW, StepFunctionEventStatus.SCHEDULED, Instant.now());
 
         handle.createUpdate("""
                         UPDATE workflow_run

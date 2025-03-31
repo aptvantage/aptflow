@@ -101,7 +101,7 @@ public class WorkflowExecutor {
             executionContext.set(new ExecutionContext(workflowRunId));
             RunnableWorkflow instance = instantiate(workflowRun.getWorkflow().getClassName());
             Serializable output = instance.execute(workflowRun.getWorkflow().getInput());
-            this.stateWriter.workflowRunCompleted(workflowRunId, output);
+            this.stateWriter.workflowRunCompleted(workflowRunId, output, Instant.now());
             logger.atInfo().log("Workflow [%s] is complete", workflowRunId);
         } catch (AwaitingSignalException e) {
             logger.atInfo().log("Pausing execution of workflow [%s] to wait for signal [%s]", workflowRunId, e.getSignal());
@@ -114,7 +114,7 @@ public class WorkflowExecutor {
         } catch (Exception e) {
             // TODO -- save some kind of Failure data with the failed workflow
             logger.atSevere().withCause(e).log("Workflow [%s] execution failed", workflowRunId);
-            this.stateWriter.failWorkflowRun(workflowRunId);
+            this.stateWriter.failWorkflowRun(workflowRunId, Instant.now());
         } finally {
             executionContext.remove();
         }
@@ -167,22 +167,26 @@ public class WorkflowExecutor {
     public <I extends Serializable, O extends Serializable> void runWorkflow(Class<? extends RunnableWorkflow<I, O>> workflowClass, I workflowParam, String workflowId) {
         logger.atInfo().log("scheduling run for new workflow [%s] of type [%s]", workflowId, workflowClass.getName());
         String workflowRunId = this.stateWriter.scheduleRunForNewWorkflow(workflowId, workflowClass, workflowParam);
-        startRun(workflowId, workflowRunId);
+        startRun(workflowRunId);
     }
 
     public void reRunWorkflowFromStart(String workflowId) {
-        // TODO - test this should fail if workflow does not exist
-        // TODO - test this should fail if existing workflow's latest run is not in a terminal state
         logger.atInfo().log("scheduling re-run of existing workflow [%s]", workflowId);
-        String workflowRunId = stateWriter.scheduleNewRunForExistingWorkflow(workflowId);
-        startRun(workflowId, workflowRunId);
+        String workflowRunId = stateWriter.scheduleNewRunForExistingWorkflow(workflowId, false);
+        startRun(workflowRunId);
     }
 
-    private void startRun(String workflowId, String workflowRunId) {
-        //TODO -- fix the fact that we are passing workflowRunId into a task input
-        // param named workflowId
+    public void reRunWorkflowFromFailed(String workflowId) {
+        // TODO - test this should fail if workflow does not exist
+        // TODO - test this should fail if existing workflow's latest run is not in a failed state
+        logger.atInfo().log("scheduling re-run from point of failure for workflow [%s]", workflowId);
+        String workflowRunId = stateWriter.scheduleNewRunForExistingWorkflow(workflowId, true);
+        startRun(workflowRunId);
+    }
+
+    private void startRun(String workflowRunId) {
         TaskInstance<RunWorkflowTaskInput> instance = startWorkflowTask.instance(
-                "workflow::%s::%s".formatted(workflowId, workflowRunId),
+                "workflow::%s".formatted(workflowRunId),
                 new RunWorkflowTaskInput(workflowRunId));
         scheduler.schedule(instance,
                 Instant.now());

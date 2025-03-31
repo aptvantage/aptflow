@@ -5,6 +5,8 @@ import com.github.kagkarlsson.scheduler.task.ExecutionContext;
 import com.github.kagkarlsson.scheduler.task.TaskInstance;
 import com.github.kagkarlsson.scheduler.task.helper.OneTimeTask;
 
+import java.time.Instant;
+
 public class StartWorkflowTask extends OneTimeTask<RunWorkflowTaskInput> {
 
     private final StateWriter stateWriter;
@@ -23,7 +25,7 @@ public class StartWorkflowTask extends OneTimeTask<RunWorkflowTaskInput> {
     @Override
     public void executeOnce(TaskInstance<RunWorkflowTaskInput> taskInstance, ExecutionContext executionContext) {
         RunWorkflowTaskInput data = taskInstance.getData();
-        stateWriter.workflowRunStarted(data.workflowRunId());
+        stateWriter.workflowRunStarted(data.workflowRunId(), Instant.now());
         workflowExecutor.executeWorkflow(data.workflowRunId());
     }
 }

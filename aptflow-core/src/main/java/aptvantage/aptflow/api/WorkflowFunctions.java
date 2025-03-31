@@ -83,7 +83,7 @@ public class WorkflowFunctions {
         logger.atInfo().log("evaluating condition [%s]", conditionKey);
         if (conditionSupplier.get()) {
             logger.atInfo().log("satisfied condition [%s]", conditionKey);
-            stateWriter.conditionSatisfied(workflowRunId, conditionIdentifier);
+            stateWriter.conditionSatisfied(workflowRunId, conditionIdentifier, Instant.now());
             return;
         }
         logger.atInfo().log("Scheduling reevaluation of condition [%s] of workflow [%s] in [%s]", conditionIdentifier, workflowRunId, evaluationInterval);
@@ -97,7 +97,7 @@ public class WorkflowFunctions {
     ConditionFunction<I, O> initializeCondition(String workflowRunId, String conditionIdentifier) {
         ConditionFunction<I, O> conditionFunction = stateReader.getConditionFunction(workflowRunId, conditionIdentifier);
         if (conditionFunction == null) {
-            stateWriter.newConditionWaiting(workflowRunId, conditionIdentifier);
+            stateWriter.newConditionWaiting(workflowRunId, conditionIdentifier, Instant.now());
             conditionFunction = stateReader.getConditionFunction(workflowRunId, conditionIdentifier);
         }
         return conditionFunction;
@@ -108,7 +108,7 @@ public class WorkflowFunctions {
         logger.atFine().log("processing workflow sleep [%s::%s]".formatted(workflowRunId, identifier));
         SleepFunction<? extends Serializable, ? extends Serializable> sleepFunction = stateReader.getSleepFunction(workflowRunId, identifier);
         if (sleepFunction == null) {
-            stateWriter.newSleepStarted(workflowRunId, identifier, duration);
+            stateWriter.newSleepStarted(workflowRunId, identifier, duration, Instant.now());
             logger.atInfo().log("scheduling wake-up-call for sleep [%s::%s] in [%s]", workflowRunId, identifier, duration);
             this.workflowExecutor.scheduleWakeUp(workflowRunId, identifier, Instant.now().plus(duration));
             throw new WorkflowSleepingException(identifier, duration);
@@ -138,7 +138,7 @@ public class WorkflowFunctions {
         SignalFunction<I, O, S> signalFunction = stateReader.getSignalFunction(workflowRunId, signalName);
         if (signalFunction == null) {
             logger.atInfo().log("waiting for signal [%s::%s]", workflowRunId, signalName);
-            stateWriter.newSignalWaiting(workflowRunId, signalName);
+            stateWriter.newSignalWaiting(workflowRunId, signalName, Instant.now());
             throw new AwaitingSignalException(signalName);
         }
         if (signalFunction.isReceived()) {
@@ -198,7 +198,7 @@ public class WorkflowFunctions {
         logger.atFine().log("processing workflow activity [%s::%s]", workflowRunId, activityName);
         if (activityFunction == null) {
             logger.atInfo().log("starting activity [%s::%s]", workflowRunId, activityName);
-            stateWriter.newActivityStarted(workflowRunId, activityName);
+            stateWriter.newActivityStarted(workflowRunId, activityName, Instant.now());
             activityFunction = stateReader.getActivityFunction(workflowRunId, activityName);
         }
         return activityFunction;
@@ -206,7 +206,7 @@ public class WorkflowFunctions {
 
     private <I extends Serializable, O extends Serializable, A extends Serializable>
     boolean activityHasAlreadyExecuted(ActivityFunction<I, O, A> activity) {
-        if (activity.isCompleted()) {
+        if (activity.hasCompleted()) {
             logger.atInfo().log("skipping previously executed activity [%s]", activity.getKey());
             return true;
         }
@@ -215,12 +215,12 @@ public class WorkflowFunctions {
 
     private <I extends Serializable, O extends Serializable, A extends Serializable>
     void completeActivity(ActivityFunction<I, O, A> activity, A output) {
-        stateWriter.completeActivity(activity.getWorkflowRun().getId(), activity.getName(), output);
+        stateWriter.completeActivity(activity.getWorkflowRun().getId(), activity.getName(), output, Instant.now());
         logger.atInfo().log("completing activity [%s]", activity.getKey());
     }
 
     private <I extends Serializable, O extends Serializable, A extends Serializable> void failActivity(ActivityFunction<I, O, A> activity, Exception e) {
-        stateWriter.failActivity(activity.getWorkflowRun().getId(), activity.getName());
+        stateWriter.failActivity(activity.getWorkflowRun().getId(), activity.getName(), Instant.now());
         logger.atSevere().withCause(e).log("activity [%s] failed", activity.getKey());
     }
 

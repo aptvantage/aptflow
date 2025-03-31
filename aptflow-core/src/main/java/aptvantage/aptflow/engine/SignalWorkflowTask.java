@@ -5,6 +5,8 @@ import com.github.kagkarlsson.scheduler.task.ExecutionContext;
 import com.github.kagkarlsson.scheduler.task.TaskInstance;
 import com.github.kagkarlsson.scheduler.task.helper.OneTimeTask;
 
+import java.time.Instant;
+
 public class SignalWorkflowTask extends OneTimeTask<SignalWorkflowTaskInput> {
     private final StateWriter stateWriter;
     private final WorkflowExecutor workflowExecutor;
@@ -19,7 +21,7 @@ public class SignalWorkflowTask extends OneTimeTask<SignalWorkflowTaskInput> {
     @Override
     public void executeOnce(TaskInstance<SignalWorkflowTaskInput> taskInstance, ExecutionContext executionContext) {
         SignalWorkflowTaskInput data = taskInstance.getData();
-        stateWriter.signalReceived(data.workflowId(), data.signalName(), data.signalValue());
+        stateWriter.signalReceived(data.workflowId(), data.signalName(), data.signalValue(), Instant.now());
         workflowExecutor.executeWorkflow(data.workflowId());
     }
 }
