@@ -217,15 +217,18 @@ public class StateReader {
         return jdbi.withHandle(handle ->
                 handle.createQuery("""
                                 SELECT
-                                    workflow_run_id,
-                                    function_id,
-                                    function_type,
-                                    started_event_id,
-                                    completed_event_id
+                                    vwrsf.workflow_run_id,
+                                    vwrsf.function_id,
+                                    vwrsf.function_type,
+                                    vwrsf.started_event_id,
+                                    vwrsf.completed_event_id,
+                                    started.timestamp
                                 FROM
-                                    v_workflow_run_step_function
+                                    v_workflow_run_step_function vwrsf
+                                    JOIN event started on started.id = vwrsf.started_event_id
                                 WHERE
-                                    workflow_run_id = :workflowRunId
+                                    vwrsf.workflow_run_id = :workflowRunId
+                                ORDER BY started.timestamp
                                 """)
                         .bind("workflowRunId", workflowRunId)
                         .map((rs, ctx) -> {
@@ -378,6 +381,7 @@ public class StateReader {
                                     workflow_run
                                 WHERE
                                     workflow_id = :workflowId
+                                ORDER BY created
                                 """)
                         .bind("workflowId", workflowId)
                         .map((rs, ctx) ->
