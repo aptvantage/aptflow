@@ -18,13 +18,13 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
-public class AptWorkflow {
+public class AptFlow {
 
     private final WorkflowExecutor workflowExecutor;
     private final AptWorkflowBuilder builder;
     private final StateReader stateReader;
 
-    private AptWorkflow(
+    private AptFlow(
             WorkflowExecutor workflowExecutor,
             AptWorkflowBuilder builder,
             StateReader stateReader
@@ -54,7 +54,10 @@ public class AptWorkflow {
         this.workflowExecutor.reRunWorkflowFromStart(workflowId);
     }
 
-    //TODO -- reRunWorkflowFromFailed
+    public void reRunWorkflowFromFailed(String workflowId) {
+        this.workflowExecutor.reRunWorkflowFromFailed(workflowId);
+    }
+
 
     public WorkflowRun<Serializable, Serializable> getLatestRun(String workflowId) {
         return stateReader.getActiveRunForWorkflowId(workflowId, null);
@@ -128,7 +131,7 @@ public class AptWorkflow {
             return this;
         }
 
-        public AptWorkflow start() {
+        public AptFlow start() {
             //TODO -- null check this.dataSource
             runDatabaseMigration(this.dataSource);
             Jdbi jdbi = Jdbi.create(this.dataSource);
@@ -146,7 +149,7 @@ public class AptWorkflow {
 
             // start this (last) after the rest of the app is completely initialized
             executor.start();
-            return new AptWorkflow(executor, this, stateReader);
+            return new AptFlow(executor, this, stateReader);
         }
 
 
