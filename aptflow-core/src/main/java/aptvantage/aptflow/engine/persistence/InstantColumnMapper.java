@@ -14,6 +14,6 @@ class InstantColumnMapper implements ColumnMapper<Instant> {
         if (timestamp == null) {
             return null;
         }
-        return Instant.ofEpochMilli(timestamp.getTime());
+        return timestamp.toInstant();
     }
 }

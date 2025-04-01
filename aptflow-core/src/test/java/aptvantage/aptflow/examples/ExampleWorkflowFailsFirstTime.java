@@ -19,16 +19,18 @@ public class ExampleWorkflowFailsFirstTime implements RunnableWorkflow<String, I
     @Override
     public Integer execute(String testName) {
 
-        activity("prior completed activity", () -> {
-            //no-op
+        activity("one-time-activity", () -> {
+            testCounterService.incrementAndGetTestCount("%s::one-time-activity".formatted(testName));
         });
+        awaitCondition("one-time-condition", () -> {
+            testCounterService.incrementAndGetTestCount("%s::one-time-condition".formatted(testName));
+            return true;
+        }, Duration.of(3, ChronoUnit.SECONDS));
 
-        awaitCondition("prior condition", () -> true, Duration.of(3, ChronoUnit.SECONDS));
-
-        int whichTime = activity("fails first time", () -> {
+        int whichTime = activity("fails-first-time", () -> {
                     int testCount = testCounterService.incrementAndGetTestCount(testName);
                     if (testCount == 1) {
-                        throw new RuntimeException("fails first time");
+                        throw new RuntimeException("failed the first time");
                     }
                     return testCount;
                 }
