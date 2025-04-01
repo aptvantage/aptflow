@@ -27,12 +27,13 @@ public class AcceptanceTest {
             .withPassword("test-password");
 
     static AptFlow aptFlow;
+    static TestCounterService testCounterService = new TestCounterService();
 
     @BeforeAll
     static void setup() {
         aptFlow = AptFlow.builder()
                 .dataSource("test-user", "test-password", postgresqlContainer.getJdbcUrl())
-                .registerWorkflowDependencies(new ExampleService(), new TestCounterService())
+                .registerWorkflowDependencies(new ExampleService(), testCounterService)
                 .start();
     }
 
@@ -109,11 +110,40 @@ public class AcceptanceTest {
         WorkflowRun<String, Integer> lastRun = aptFlow.getLatestRun(workflowId, workflowClass);
         assertFalse(lastRun.hasFailed());
 
-        // TODO assert non failed prior steps all got carried over and have the same timestamps
-        // TODO assert that the prior steps did not run a 2nd time
-        // TODO assert that the failed step was started over
+        // and the failed activity ran a 2nd time
+        assertEquals(2, lastRun.getOutput());
+
+        // and previous complete activities did not run a 2nd time
+        assertEquals(1, testCounterService.getTestCount("%s::one-time-activity".formatted(workflowId)));
+        assertEquals(1, testCounterService.getTestCount("%s::one-time-condition".formatted(workflowId)));
+
+        // and the functions completed in the first run have the same values in the 2nd run
+        Workflow<Serializable, Serializable> workflowResult = aptFlow.getWorkflowResult(workflowId);
+        WorkflowRun<Serializable, Serializable> firstRun = workflowResult.getWorkflowRuns().get(0);
+        List<StepFunction<Serializable, Serializable>> firstRunFunctions = firstRun.getFunctions();
+        List<StepFunction<String, Integer>> lastRunFunctions = lastRun.getFunctions();
+
+        // id, type, startedEvent.timestamp, and completedEvent.timestamp are equal
+        assertTrue(functionsHaveSameValues(firstRunFunctions.get(0), lastRunFunctions.get(0)));
+        assertTrue(functionsHaveSameValues(firstRunFunctions.get(1), lastRunFunctions.get(1)));
+
 
     }
+
+    /**
+     * true if id, type, startedEvent.timestamp, and completedEvent.timestamp are equal
+     *
+     * @param one
+     * @param other
+     * @return
+     */
+    boolean functionsHaveSameValues(StepFunction one, StepFunction other) {
+        return one.getId().equals(other.getId())
+                && one.getStepFunctionType().equals(other.getStepFunctionType())
+                && one.getStartedEvent().getTimestamp().equals(other.getStartedEvent().getTimestamp())
+                && one.getCompletedEvent().getTimestamp().equals(other.getCompletedEvent().getTimestamp());
+    }
+
 
     @Test
     @Execution(ExecutionMode.CONCURRENT)
