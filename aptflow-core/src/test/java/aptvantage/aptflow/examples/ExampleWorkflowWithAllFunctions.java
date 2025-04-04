@@ -1,22 +1,24 @@
 package aptvantage.aptflow.examples;
 
 import aptvantage.aptflow.api.RunnableWorkflow;
+import aptvantage.aptflow.api.StepFunctions;
 
 import java.time.Duration;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import static aptvantage.aptflow.api.WorkflowFunctions.*;
+import static aptvantage.aptflow.api.WorkflowFunctions.activity;
 
 public class ExampleWorkflowWithAllFunctions implements RunnableWorkflow<Integer, String> {
 
     private static final AtomicInteger conditionCheckCount = new AtomicInteger(0);
     private final ExampleService service;
+    private final StepFunctions steps;
 
-    public ExampleWorkflowWithAllFunctions(ExampleService service) {
-
+    public ExampleWorkflowWithAllFunctions(ExampleService service, StepFunctions steps) {
         this.service = service;
+        this.steps = steps;
     }
 
     static void sleepForMillis(long millis) {
@@ -30,25 +32,25 @@ public class ExampleWorkflowWithAllFunctions implements RunnableWorkflow<Integer
     @Override
     public String execute(Integer param) {
 
-        String convertedToString = activity("Convert to String", () -> param.toString());
+        String convertedToString = steps.activity("Convert to String", () -> param.toString());
 
-        boolean okToResume = awaitSignal("OkToResume", Boolean.class);
+        boolean okToResume = steps.awaitSignal("OkToResume", Boolean.class);
 
         System.out.printf("received signal to resume [%s]%n", okToResume);
 
-        activity("Work for between 1 and 5 seconds", service::doSomeWork);
+        steps.activity("Work for between 1 and 5 seconds", service::doSomeWork);
 
-        String concatenated = activity("Concatenate", () -> convertedToString + "asdf");
+        String concatenated = steps.activity("Concatenate", () -> convertedToString + "asdf");
 
-        sleep("take a nap", Duration.ofSeconds(1));
+        steps.sleep("take a nap", Duration.ofSeconds(1));
 
-        CompletableFuture<Void> sleepFor5 = async(()
+        CompletableFuture<Void> sleepFor5 = steps.async(()
                 -> activity("Work for 5 seconds", () -> sleepForMillis(5_000)));
 
-        CompletableFuture<Void> sleepFor1 = async(()
+        CompletableFuture<Void> sleepFor1 = steps.async(()
                 -> activity("Work for 1 second", () -> sleepForMillis(1_000)));
 
-        awaitCondition("run a few times", () -> conditionCheckCount.getAndIncrement() > 2, Duration.ofSeconds(3));
+        steps.awaitCondition("run a few times", () -> conditionCheckCount.getAndIncrement() > 2, Duration.ofSeconds(3));
 
         try {
             sleepFor5.get();

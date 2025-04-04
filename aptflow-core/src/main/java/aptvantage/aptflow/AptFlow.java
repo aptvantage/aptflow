@@ -1,6 +1,7 @@
 package aptvantage.aptflow;
 
 import aptvantage.aptflow.api.RunnableWorkflow;
+import aptvantage.aptflow.api.StepFunctions;
 import aptvantage.aptflow.api.WorkflowFunctions;
 import aptvantage.aptflow.engine.WorkflowExecutor;
 import aptvantage.aptflow.engine.persistence.StateReader;
@@ -145,7 +146,10 @@ public class AptFlow {
                     workflowDependencies,
                     stateReader);
 
-            WorkflowFunctions.initialize(executor, stateReader, stateWriter);
+            StepFunctions stepFunctions = new StepFunctions(executor, stateReader, stateWriter);
+            workflowDependencies.add(stepFunctions);
+
+            WorkflowFunctions.initialize(stepFunctions);
 
             // start this (last) after the rest of the app is completely initialized
             executor.start();
