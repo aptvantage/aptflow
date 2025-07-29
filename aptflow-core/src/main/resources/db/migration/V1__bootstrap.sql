@@ -66,6 +66,7 @@ CREATE TABLE condition
     identifier         VARCHAR   NOT NULL,
     waiting_event_id   VARCHAR,
     satisfied_event_id VARCHAR,
+    timed_out_event_id VARCHAR,
     created            TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -101,6 +102,9 @@ UNION
     FROM "condition"
 UNION
     SELECT identifier AS function_id, satisfied_event_id AS event_id
+    FROM "condition"
+UNION
+    SELECT identifier AS function_id, timed_out_event_id AS event_id
     FROM "condition"
 UNION
     SELECT name, waiting_event_id AS event_id
