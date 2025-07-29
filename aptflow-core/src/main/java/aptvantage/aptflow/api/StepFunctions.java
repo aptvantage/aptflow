@@ -34,10 +34,21 @@ public class StepFunctions {
     }
 
     public void awaitCondition(String conditionIdentifier, Supplier<Boolean> conditionSupplier, Duration evaluationInterval) {
+        this.withConditionSettings()
+                .stepName(conditionIdentifier)
+                .evaluationInterval(evaluationInterval)
+                .awaitCondition(conditionSupplier);
+    }
+
+    public AwaitConditionSettings withConditionSettings() {
+        return new AwaitConditionSettings(this);
+    }
+
+    void awaitCondition(AwaitConditionSettings settings, Supplier<Boolean> conditionSupplier) {
         String workflowRunId = workflowExecutor.getExecutionContext().workflowRunId();
-        String conditionKey = "condition::%s::%s".formatted(workflowRunId, conditionIdentifier);
+        String conditionKey = "condition::%s::%s".formatted(workflowRunId, settings.stepName());
         logger.atFine().log("processing condition [%s]", conditionKey);
-        ConditionFunction<? extends Serializable, ? extends Serializable> conditionFunction = initializeCondition(workflowRunId, conditionIdentifier);
+        ConditionFunction<? extends Serializable, ? extends Serializable> conditionFunction = initializeCondition(workflowRunId, settings.stepName());
         if (conditionFunction.isSatisfied()) {
             logger.atInfo().log("skipping previously satisfied condition [%s]", conditionKey);
             return;
@@ -45,14 +56,19 @@ public class StepFunctions {
         logger.atInfo().log("evaluating condition [%s]", conditionKey);
         if (conditionSupplier.get()) {
             logger.atInfo().log("satisfied condition [%s]", conditionKey);
-            stateWriter.conditionSatisfied(workflowRunId, conditionIdentifier, Instant.now());
+            stateWriter.conditionSatisfied(workflowRunId, settings.stepName(), Instant.now());
             return;
         }
-        logger.atInfo().log("Scheduling reevaluation of condition [%s] of workflow [%s] in [%s]", conditionIdentifier, workflowRunId, evaluationInterval);
-        this.workflowExecutor.scheduleReevaluation(workflowRunId, conditionIdentifier, Instant.now().plus(evaluationInterval));
+        if (Instant.now().toEpochMilli() - conditionFunction.getStartedEvent().getTimestamp().toEpochMilli() > settings.timeout().toMillis()) {
+            stateWriter.timeoutCondition(workflowRunId, settings.stepName(), Instant.now());
+            logger.atSevere().log("condition [%s] timed out", conditionKey);
+            throw new ConditionTimeoutException(conditionKey);
 
-        throw new ConditionNotSatisfiedException(conditionIdentifier);
+        }
+        logger.atInfo().log("Scheduling reevaluation of condition [%s] of workflow [%s] in [%s]", settings.stepName(), workflowRunId, settings.evaluationInterval());
+        this.workflowExecutor.scheduleReevaluation(workflowRunId, settings.stepName(), Instant.now().plus(settings.evaluationInterval()));
 
+        throw new ConditionNotSatisfiedException(settings.stepName());
     }
 
     private <I extends Serializable, O extends Serializable>

@@ -261,6 +261,28 @@ public class AcceptanceTest {
 
     @Test
     @Execution(ExecutionMode.CONCURRENT)
+    public void testWorkflowWithConditionTimeout() throws Exception {
+
+        // given we run a workflow with a condition that will time out
+        String workflowId = "testWorkflowWithConditionTimeout";
+        Class<? extends RunnableWorkflow<Integer, String>> workflowClass = ExampleWorkflowWithConditionTimeout.class;
+        aptFlow.runWorkflow(workflowClass, 3, workflowId);
+
+        // then the workflow will eventually fail
+        Awaitility.await().atMost(10, TimeUnit.SECONDS).until(() -> aptFlow.getLatestRun(workflowId).hasFailed());
+
+        // and the condition will have timed out
+        List<StepFunctionEvent<Integer, String>> functionEvents = aptFlow.getLatestRun(workflowId, workflowClass).getFunctionEvents();
+        assertEquals(5, functionEvents.size());
+        // 0:workflowScheduled, 1:workflowStarted, 2:conditionWaiting, 3:conditionTimedOut
+        assertTrue(eventMatches(functionEvents.get(3), StepFunctionType.CONDITION, StepFunctionEventStatus.TIMED_OUT));
+
+    }
+
+    //TODO test re-run from timed-out condition
+
+    @Test
+    @Execution(ExecutionMode.CONCURRENT)
     public void testExampleWorkflowWithAllFunctions() throws Exception {
         // When a workflow with all functions is run
         String workflowId = "testExampleWorkflowWithAllFunctions";

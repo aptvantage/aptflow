@@ -83,6 +83,23 @@ public class StateWriter {
         });
     }
 
+    public void timeoutCondition(String workflowRunId, String stepName, Instant timestamp) {
+        jdbi.useTransaction(handle -> {
+            String eventId = newEvent(handle, workflowRunId, StepFunctionType.CONDITION, StepFunctionEventStatus.TIMED_OUT, timestamp);
+
+            handle.createUpdate("""
+                            UPDATE "condition"
+                            SET timed_out_event_id = :eventId
+                            WHERE workflow_run_id = :workflowRunId and identifier = :stepName
+                            """)
+                    .bind("workflowRunId", workflowRunId)
+                    .bind("stepName", stepName)
+                    .bind("eventId", eventId)
+                    .execute();
+
+        });
+    }
+
     public void completeActivity(String workflowRunId, String name, Serializable output, Instant timestamp) {
         jdbi.useTransaction(handle -> {
             completeActivity(handle, workflowRunId, name, output, timestamp);
