@@ -1,11 +1,9 @@
-name: Publish LATEST-SNAPSHOT
+name: Publish Release
 on:
-  push:
-    branches:
-      - main
+  release:
+    types: [created]
 jobs:
-  publish-latest-snapshot:
-    name: Publish Latest Snapshot
+  build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,11 +17,13 @@ jobs:
       - name: Build with Gradle
         run: |
           gradle clean build
-      - name: Publish Release to Maven Central
+      - name: Set environment variable
+        run: echo "RELEASE_VERSION=${GITHUB_REF#refs/*/}" >> $GITHUB_ENV
+      - name: Publish LATEST-SNAPSHOT
         env:
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.ORG_GRADLE_PROJECT_MAVENCENTRALUSERNAME }}
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.ORG_GRADLE_PROJECT_MAVENCENTRALPASSWORD }}
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.ORG_GRADLE_PROJECT_SIGNINGINMEMORYKEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.ORG_GRADLE_PROJECT_SIGNINGINMEMORYKEYPASSWORD }}
         run: |
-          gradle publishAllPublicationsToMavenCentralRepository -Pversion=LATEST-SNAPSHOT
+          gradle publishToMavenCentral -Pversion=${{ env.RELEASE_VERSION }} --no-configuration-cache
