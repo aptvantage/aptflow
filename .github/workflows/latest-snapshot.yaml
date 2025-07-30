@@ -4,8 +4,8 @@ on:
     branches:
       - main
 jobs:
-  publish-latest-snapshot:
-    name: Publish Latest Snapshot
+  publish-release:
+    name: Publish Release
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
