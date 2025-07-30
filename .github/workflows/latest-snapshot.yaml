@@ -18,7 +18,7 @@ jobs:
         uses: gradle/actions/setup-gradle@v4.0.0
       - name: Build with Gradle
         run: |
-          ./gradlew clean build
+          gradle clean build
       - name: Publish Release to Maven Central
         env:
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.ORG_GRADLE_PROJECT_MAVENCENTRALUSERNAME }}
@@ -26,4 +26,4 @@ jobs:
           ORG_GRADLE_PROJECT_signingInMemoryKey: ${{ secrets.ORG_GRADLE_PROJECT_SIGNINGINMEMORYKEY }}
           ORG_GRADLE_PROJECT_signingInMemoryKeyPassword: ${{ secrets.ORG_GRADLE_PROJECT_SIGNINGINMEMORYKEYPASSWORD }}
         run: |
-          ./gradlew publishAllPublicationsToMavenCentralRepository -Pversion=LATEST-SNAPSHOT
+          gradle publishAllPublicationsToMavenCentralRepository -Pversion=LATEST-SNAPSHOT
