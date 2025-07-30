@@ -19,7 +19,7 @@ jobs:
       - name: Build with Gradle
         run: |
           ./gradlew clean build
-      - name: Publish LATEST-SNAPSHOT
+      - name: Publish Release to Maven Central
         env:
           ORG_GRADLE_PROJECT_mavenCentralUsername: ${{ secrets.ORG_GRADLE_PROJECT_MAVENCENTRALUSERNAME }}
           ORG_GRADLE_PROJECT_mavenCentralPassword: ${{ secrets.ORG_GRADLE_PROJECT_MAVENCENTRALPASSWORD }}
